@@ -6,6 +6,9 @@ export function AppointmentBooking() {
   const [selectedExpert, setSelectedExpert] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -24,8 +27,13 @@ export function AppointmentBooking() {
   };
 
   const handleBook = async () => {
-    if (!selectedExpert || !selectedDate || !selectedTime) {
+    if (!selectedExpert || !selectedDate || !selectedTime || !fullName || !email || !phone) {
       alert('Lütfen tüm alanları doldurunuz');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      alert('Lütfen geçerli bir e-posta adresi giriniz');
       return;
     }
 
@@ -36,9 +44,11 @@ export function AppointmentBooking() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           expertId: parseInt(selectedExpert),
-          userName: 'Müşteri',
-          selectedDate,
-          selectedTime
+          userName: fullName,
+          userEmail: email,
+          userPhone: phone,
+          appointmentDate: selectedDate,
+          appointmentTime: selectedTime
         })
       });
 
@@ -51,6 +61,9 @@ export function AppointmentBooking() {
       setSelectedExpert('');
       setSelectedDate('');
       setSelectedTime('');
+      setFullName('');
+      setEmail('');
+      setPhone('');
     } catch (error) {
       console.error('Error booking appointment:', error);
       alert('Randevu oluştururken hata oluştu: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -75,10 +88,52 @@ export function AppointmentBooking() {
 
         {/* Booking Form */}
         <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8 space-y-5 sm:space-y-6">
+          {/* Full Name */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Adınız Soyadınız <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Adınız ve soyadınız"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              E-posta Adresiniz <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ornek@email.com"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Gsm Numaranız <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="05XX XXX XXXX"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
           {/* Expert Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              IT Uzmanı Seçiniz <span className="text-red-500">*</span>
+              Hizmet Alanı Seçiniz <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedExpert}

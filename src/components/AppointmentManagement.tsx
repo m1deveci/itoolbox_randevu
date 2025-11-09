@@ -3,6 +3,9 @@ import { CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface Appointment {
   id: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
   expertName: string;
   date: string;
   time: string;
@@ -32,6 +35,9 @@ export function AppointmentManagement() {
 
       setAppointments(data.appointments.map((a: any) => ({
         id: a.id.toString(),
+        userName: a.user_name,
+        userEmail: a.user_email,
+        userPhone: a.user_phone,
         expertName: a.expert_name,
         date: a.date.split('T')[0],
         time: a.time.substring(0, 5),
@@ -126,6 +132,9 @@ export function AppointmentManagement() {
               <table className="w-full">
                 <thead className="bg-gray-100">
                   <tr>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Müşteri</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">E-posta</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Telefon</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Uzman</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Tarih</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Saat</th>
@@ -136,6 +145,9 @@ export function AppointmentManagement() {
                 <tbody>
                   {filteredAppointments.map((apt) => (
                     <tr key={apt.id} className="border-t hover:bg-gray-50">
+                      <td className="px-4 lg:px-6 py-3 text-sm">{apt.userName}</td>
+                      <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userEmail}</td>
+                      <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userPhone}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.expertName}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.date}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.time}</td>
@@ -181,8 +193,11 @@ export function AppointmentManagement() {
             {filteredAppointments.map((apt) => (
               <div key={apt.id} className="bg-white rounded-lg shadow p-4 space-y-3">
                 <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <p className="font-semibold text-sm text-gray-900">{apt.expertName}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-gray-900">{apt.userName}</p>
+                    <p className="text-xs text-gray-600 truncate">{apt.userEmail}</p>
+                    <p className="text-xs text-gray-600">{apt.userPhone}</p>
+                    <p className="font-medium text-xs text-gray-700 mt-2">{apt.expertName}</p>
                     <p className="text-xs text-gray-600">{apt.date} {apt.time}</p>
                   </div>
                   <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${

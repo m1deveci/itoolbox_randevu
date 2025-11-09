@@ -9,7 +9,7 @@ module.exports = (pool) => {
       const offset = (parseInt(page) - 1) * parseInt(limit);
 
       let query = `
-        SELECT a.id, a.expert_id, a.user_name, a.appointment_date as date,
+        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.appointment_date as date,
                a.appointment_time as time, a.status, a.notes,
                e.name as expert_name, a.created_at
         FROM appointments a
@@ -80,7 +80,7 @@ module.exports = (pool) => {
   router.get('/:id', async (req, res) => {
     try {
       const [appointments] = await pool.execute(
-        `SELECT a.id, a.expert_id, a.user_name, a.appointment_date as date,
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.appointment_date as date,
                 a.appointment_time as time, a.status, a.notes,
                 e.name as expert_name, a.created_at
          FROM appointments a
@@ -103,11 +103,11 @@ module.exports = (pool) => {
   // POST /api/appointments - Create new appointment
   router.post('/', async (req, res) => {
     try {
-      const { expertId, userName, selectedDate, selectedTime, notes } = req.body;
+      const { expertId, userName, userEmail, userPhone, appointmentDate, appointmentTime, notes } = req.body;
 
       // Validate input
-      if (!expertId || !userName || !selectedDate || !selectedTime) {
-        return res.status(400).json({ error: 'Expert ID, user name, date, and time are required' });
+      if (!expertId || !userName || !userEmail || !userPhone || !appointmentDate || !appointmentTime) {
+        return res.status(400).json({ error: 'Expert ID, user name, email, phone, date, and time are required' });
       }
 
       // Check if expert exists
@@ -125,7 +125,7 @@ module.exports = (pool) => {
         `SELECT id FROM appointments
          WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
          AND status != 'cancelled'`,
-        [expertId, selectedDate, selectedTime]
+        [expertId, appointmentDate, appointmentTime]
       );
 
       if (conflicts.length > 0) {
@@ -133,17 +133,19 @@ module.exports = (pool) => {
       }
 
       const [result] = await pool.execute(
-        `INSERT INTO appointments (expert_id, user_name, appointment_date, appointment_time, status, notes)
-         VALUES (?, ?, ?, ?, 'pending', ?)`,
-        [expertId, userName, selectedDate, selectedTime, notes || null]
+        `INSERT INTO appointments (expert_id, user_name, user_email, user_phone, appointment_date, appointment_time, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [expertId, userName, userEmail, userPhone, appointmentDate, appointmentTime, notes || null]
       );
 
       res.status(201).json({
         id: result.insertId,
         expertId,
         userName,
-        date: selectedDate,
-        time: selectedTime,
+        userEmail,
+        userPhone,
+        date: appointmentDate,
+        time: appointmentTime,
         status: 'pending',
         notes: notes || null,
         created_at: new Date().toISOString()

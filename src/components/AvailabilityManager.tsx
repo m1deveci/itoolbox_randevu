@@ -1,15 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Trash2, Zap, AlertCircle, CheckCircle } from 'lucide-react';
+import { Clock, Plus, Trash2, Zap, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Availability {
   id: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  expertName?: string;
+  expertId?: number;
+}
+
+interface WeekGroup {
+  weekLabel: string;
+  startDate: Date;
+  endDate: Date;
+  days: Array<{
+    dayName: string;
+    dayOfWeek: number;
+    date: Date;
+    dateString: string;
+    availabilities: Availability[];
+  }>;
 }
 
 export function AvailabilityManager() {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [newAvailability, setNewAvailability] = useState({
     dayOfWeek: 1,
     startTime: '09:00',
@@ -17,6 +33,74 @@ export function AvailabilityManager() {
   });
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupMessage, setSetupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const dayNames = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const getWeekDates = (offset: number) => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    // JavaScript'te 0=Pazar, 1=Pazartesi... Biz Pazartesi'yi 0 olarak kullanıyoruz
+    // currentDay'i türkçe haftaya çevirelim
+    const turkishDay = currentDay === 0 ? 6 : currentDay - 1; // 0=Pazartesi
+
+    const mondayOfThisWeek = new Date(today);
+    mondayOfThisWeek.setDate(today.getDate() - turkishDay);
+
+    const startDate = new Date(mondayOfThisWeek);
+    startDate.setDate(startDate.getDate() + offset * 7);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      days.push(date);
+    }
+
+    return { startDate: days[0], endDate: days[6], allDates: days };
+  };
+
+  const getWeekLabel = () => {
+    const { startDate, endDate } = getWeekDates(weekOffset);
+    if (weekOffset === 0) {
+      return 'Bu Hafta';
+    } else if (weekOffset === 1) {
+      return 'Önümüzdeki Hafta';
+    } else if (weekOffset === -1) {
+      return 'Geçen Hafta';
+    } else {
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    }
+  };
+
+  const groupAvailabilitiesByWeek = (): WeekGroup => {
+    const { startDate, endDate, allDates } = getWeekDates(weekOffset);
+
+    const days = allDates.map((date, index) => {
+      const dayOfWeek = index; // 0=Pazartesi, 1=Salı, ..., 6=Pazar
+      const dateString = date.toISOString().split('T')[0];
+
+      const dayAvailabilities = availabilities.filter(a => a.dayOfWeek === dayOfWeek);
+
+      return {
+        dayName: dayNames[dayOfWeek],
+        dayOfWeek,
+        date,
+        dateString,
+        availabilities: dayAvailabilities
+      };
+    });
+
+    return {
+      weekLabel: getWeekLabel(),
+      startDate,
+      endDate,
+      days
+    };
+  };
 
   useEffect(() => {
     // TODO: Fetch from API
@@ -32,7 +116,9 @@ export function AvailabilityManager() {
         id: a.id.toString(),
         dayOfWeek: a.day_of_week,
         startTime: a.start_time,
-        endTime: a.end_time
+        endTime: a.end_time,
+        expertName: a.expert_name,
+        expertId: a.expert_id
       })));
     } catch (error) {
       console.error('Error loading availabilities:', error);
@@ -131,7 +217,7 @@ export function AvailabilityManager() {
     }
   };
 
-  const dayNames = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+  const weekGroup = groupAvailabilitiesByWeek();
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -175,6 +261,65 @@ export function AvailabilityManager() {
           </p>
         </div>
       )}
+
+      {/* Week Navigation and Display */}
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => setWeekOffset(weekOffset - 1)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Önceki
+          </button>
+          <h3 className="text-base sm:text-lg font-semibold text-center flex-1">
+            {weekGroup.weekLabel} <span className="text-sm text-gray-600">({formatDate(weekGroup.startDate)} - {formatDate(weekGroup.endDate)})</span>
+          </h3>
+          <button
+            onClick={() => setWeekOffset(weekOffset + 1)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded transition"
+          >
+            Sonraki
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Week Days Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {weekGroup.days.map((day) => (
+            <div key={day.dayOfWeek} className="border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="font-semibold text-sm text-gray-900">{day.dayName}</p>
+                  <p className="text-xs text-gray-600">{formatDate(day.date)}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {day.availabilities.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">Müsaitlik yok</p>
+                ) : (
+                  day.availabilities.map((avail) => (
+                    <div key={avail.id} className="flex items-center justify-between bg-green-50 p-2 rounded">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-mono text-green-700">
+                          {avail.startTime}-{avail.endTime}
+                        </p>
+                        <p className="text-xs text-gray-600 truncate">{avail.expertName}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAvailability(avail.id)}
+                        className="ml-2 text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded transition flex-shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Add Availability Form */}
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">

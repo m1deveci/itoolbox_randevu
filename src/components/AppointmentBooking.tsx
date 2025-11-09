@@ -78,7 +78,7 @@ export function AppointmentBooking() {
           {/* Expert Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Hizmet Alanı Seçiniz <span className="text-red-500">*</span>
+              IT Uzmanı Seçiniz <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedExpert}

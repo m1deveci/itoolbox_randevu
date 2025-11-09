@@ -1,5 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const mysql = require('mysql2/promise');
+
+// Create connection pool for ittoolbox database
+const ittoolboxPool = mysql.createPool({
+  host: 'localhost',
+  user: 'toolbox_native',
+  password: 'GuvenliParola123!',
+  database: 'ittoolbox',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+  timezone: '+03:00'
+});
 
 module.exports = (pool) => {
   // GET /api/experts - Get all experts
@@ -120,6 +133,68 @@ module.exports = (pool) => {
     } catch (error) {
       console.error('Error deleting expert:', error);
       res.status(500).json({ error: 'Failed to delete expert' });
+    }
+  });
+
+  // POST /api/experts/import - Import admin/superadmin users from ittoolbox database
+  router.post('/import/from-ittoolbox', async (req, res) => {
+    try {
+      // Get all admin and superadmin users from ittoolbox database
+      const [ittoolboxUsers] = await ittoolboxPool.execute(
+        'SELECT id, name, email FROM users WHERE role IN (?, ?) AND email IS NOT NULL',
+        ['admin', 'superadmin']
+      );
+
+      if (ittoolboxUsers.length === 0) {
+        return res.status(400).json({ error: 'No admin users found in ittoolbox database' });
+      }
+
+      let imported = 0;
+      let skipped = 0;
+      const results = [];
+
+      for (const user of ittoolboxUsers) {
+        try {
+          const [result] = await pool.execute(
+            'INSERT INTO experts (name, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)',
+            [user.name, user.email]
+          );
+
+          results.push({
+            name: user.name,
+            email: user.email,
+            status: result.affectedRows > 0 ? 'imported' : 'updated'
+          });
+
+          if (result.affectedRows > 0) {
+            imported++;
+          } else {
+            skipped++;
+          }
+        } catch (error) {
+          if (error.code === 'ER_DUP_ENTRY') {
+            skipped++;
+            results.push({
+              name: user.name,
+              email: user.email,
+              status: 'skipped'
+            });
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      res.json({
+        message: 'Import completed successfully',
+        imported,
+        skipped,
+        total: ittoolboxUsers.length,
+        results
+      });
+    } catch (error) {
+      console.error('Error importing experts:', error);
+      res.status(500).json({ error: 'Failed to import experts from ittoolbox' });
     }
   });
 

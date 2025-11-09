@@ -2,13 +2,24 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 
-// Create a separate connection pool for ittoolbox database
+// Create connection pools
 const mysql = require('mysql2/promise');
 const ittoolboxPool = mysql.createPool({
   host: 'localhost',
   user: 'toolbox_native',
   password: 'GuvenliParola123!',
   database: 'ittoolbox',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+  timezone: '+03:00'
+});
+
+const randevuPool = mysql.createPool({
+  host: 'localhost',
+  user: 'randevu_user',
+  password: 'randevu_pass_secure_2024',
+  database: 'ittoolbox_randevu',
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
@@ -41,6 +52,18 @@ router.post('/login', async (req, res) => {
 
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Email veya şifre yanlış' });
+    }
+
+    // Add/update admin as expert in randevu database
+    try {
+      await randevuPool.execute(
+        `INSERT INTO experts (id, name, email) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email)`,
+        [user.id, user.name, user.email]
+      );
+    } catch (error) {
+      console.error('Error syncing expert:', error);
+      // Don't fail login if expert sync fails
     }
 
     // Return user info (without password)

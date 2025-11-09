@@ -83,118 +83,141 @@ export function AppointmentManagement() {
     : appointments.filter(a => a.status === filter);
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Randevu Yönetimi</h2>
+    <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-xl sm:text-2xl font-bold">Randevu Yönetimi</h2>
 
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded ${
-            filter === 'all'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-          }`}
-        >
-          Tümü
-        </button>
-        <button
-          onClick={() => setFilter('pending')}
-          className={`px-4 py-2 rounded ${
-            filter === 'pending'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-          }`}
-        >
-          Beklemede
-        </button>
-        <button
-          onClick={() => setFilter('approved')}
-          className={`px-4 py-2 rounded ${
-            filter === 'approved'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-          }`}
-        >
-          Onaylı
-        </button>
-        <button
-          onClick={() => setFilter('cancelled')}
-          className={`px-4 py-2 rounded ${
-            filter === 'cancelled'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-          }`}
-        >
-          İptal Edilmiş
-        </button>
+      {/* Filter Buttons - Mobile Responsive */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[
+          { label: 'Tümü', key: 'all' as const },
+          { label: 'Beklemede', key: 'pending' as const },
+          { label: 'Onaylı', key: 'approved' as const },
+          { label: 'İptal', key: 'cancelled' as const }
+        ].map(({ label, key }) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition ${
+              filter === key
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-3 text-left font-semibold">Uzman</th>
-                <th className="px-6 py-3 text-left font-semibold">Tarih</th>
-                <th className="px-6 py-3 text-left font-semibold">Saat</th>
-                <th className="px-6 py-3 text-left font-semibold">Durum</th>
-                <th className="px-6 py-3 text-left font-semibold">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center">Yükleniyor...</td>
-                </tr>
-              ) : filteredAppointments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                    Randevu bulunamadı
-                  </td>
-                </tr>
-              ) : (
-                filteredAppointments.map((apt) => (
-                  <tr key={apt.id} className="border-t hover:bg-gray-50">
-                    <td className="px-6 py-4">{apt.expertName}</td>
-                    <td className="px-6 py-4">{apt.date}</td>
-                    <td className="px-6 py-4">{apt.time}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                        apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        apt.status === 'approved' ? 'bg-green-100 text-green-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {apt.status === 'pending' && <Clock className="w-4 h-4" />}
-                        {apt.status === 'approved' && <CheckCircle className="w-4 h-4" />}
-                        {apt.status === 'cancelled' && <XCircle className="w-4 h-4" />}
-                        {apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : 'İptal Edilmiş'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 space-x-2">
-                      {apt.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(apt.id)}
-                            className="text-green-500 hover:text-green-700 font-semibold"
-                          >
-                            Onayla
-                          </button>
-                          <button
-                            onClick={() => handleCancel(apt.id)}
-                            className="text-red-500 hover:text-red-700 font-semibold"
-                          >
-                            Red
-                          </button>
-                        </>
-                      )}
-                    </td>
+      {/* Appointments Table - Mobile Card View on Small Screens */}
+
+      {loading && (
+        <div className="text-center py-8 text-gray-500">Yükleniyor...</div>
+      )}
+
+      {!loading && filteredAppointments.length === 0 && (
+        <div className="text-center py-8 text-gray-500 bg-white rounded-lg">Randevu bulunamadı</div>
+      )}
+
+      {!loading && filteredAppointments.length > 0 && (
+        <>
+          {/* Desktop Table */}
+          <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Uzman</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Tarih</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Saat</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Durum</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">İşlem</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody>
+                  {filteredAppointments.map((apt) => (
+                    <tr key={apt.id} className="border-t hover:bg-gray-50">
+                      <td className="px-4 lg:px-6 py-3 text-sm">{apt.expertName}</td>
+                      <td className="px-4 lg:px-6 py-3 text-sm">{apt.date}</td>
+                      <td className="px-4 lg:px-6 py-3 text-sm">{apt.time}</td>
+                      <td className="px-4 lg:px-6 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                          apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          apt.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {apt.status === 'pending' && <Clock className="w-3 h-3" />}
+                          {apt.status === 'approved' && <CheckCircle className="w-3 h-3" />}
+                          {apt.status === 'cancelled' && <XCircle className="w-3 h-3" />}
+                          <span className="hidden sm:inline">{apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : 'İptal'}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 lg:px-6 py-3 space-x-1 sm:space-x-2">
+                        {apt.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleApprove(apt.id)}
+                              className="text-xs sm:text-sm text-green-600 hover:text-green-800 font-semibold hover:bg-green-50 px-2 py-1 rounded"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => handleCancel(apt.id)}
+                              className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-semibold hover:bg-red-50 px-2 py-1 rounded"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {filteredAppointments.map((apt) => (
+              <div key={apt.id} className="bg-white rounded-lg shadow p-4 space-y-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{apt.expertName}</p>
+                    <p className="text-xs text-gray-600">{apt.date} {apt.time}</p>
+                  </div>
+                  <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                    apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    apt.status === 'approved' ? 'bg-green-100 text-green-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {apt.status === 'pending' && <Clock className="w-3 h-3" />}
+                    {apt.status === 'approved' && <CheckCircle className="w-3 h-3" />}
+                    {apt.status === 'cancelled' && <XCircle className="w-3 h-3" />}
+                    {apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : 'İptal'}
+                  </span>
+                </div>
+
+                {apt.status === 'pending' && (
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => handleApprove(apt.id)}
+                      className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-semibold py-2 rounded transition"
+                    >
+                      Onayla
+                    </button>
+                    <button
+                      onClick={() => handleCancel(apt.id)}
+                      className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold py-2 rounded transition"
+                    >
+                      Red
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

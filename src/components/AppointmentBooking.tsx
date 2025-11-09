@@ -60,54 +60,103 @@ export function AppointmentBooking() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-6">
-        <Calendar className="w-6 h-6" />
-        <h2 className="text-2xl font-bold">Randevu Al</h2>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8 flex items-center">
+      <div className="w-full max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="bg-blue-500 text-white rounded-full p-3">
+              <Calendar className="w-6 h-6" />
+            </div>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">IT Uzman Randevusu</h1>
+          <p className="text-sm sm:text-base text-gray-600">Uzmanlarımızdan hizmet almak için randevu alınız</p>
+        </div>
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-semibold mb-2">Uzman Seçini</label>
-          <select
-            value={selectedExpert}
-            onChange={(e) => setSelectedExpert(e.target.value)}
-            className="w-full border rounded px-3 py-2"
+        {/* Booking Form */}
+        <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8 space-y-5 sm:space-y-6">
+          {/* Expert Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Hizmet Alanı Seçiniz <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedExpert}
+              onChange={(e) => setSelectedExpert(e.target.value)}
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            >
+              <option value="">-- Uzman Seçiniz --</option>
+              {experts.map((expert: any) => (
+                <option key={expert.id} value={expert.id}>
+                  {expert.name} ({expert.email})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Tercih Ettiğiniz Tarih <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
+          {/* Time Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Tercih Ettiğiniz Saat <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="time"
+              value={selectedTime}
+              onChange={(e) => setSelectedTime(e.target.value)}
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleBook}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 text-sm sm:text-base"
           >
-            <option value="">-- Uzman Seçiniz --</option>
-            {experts.map((expert: any) => (
-              <option key={expert.id} value={expert.id}>{expert.name}</option>
-            ))}
-          </select>
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Yükleniyor...
+              </span>
+            ) : (
+              'Randevu Al'
+            )}
+          </button>
+
+          {/* Info */}
+          <p className="text-xs text-gray-500 text-center">
+            Tüm alanları doldurarak randevu talebinizi gönderin. En kısa sürede onaylanacaktır.
+          </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold mb-2">Tarih</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-          />
+        {/* Features */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-blue-500 text-2xl mb-2">✓</div>
+            <p className="text-xs sm:text-sm font-medium text-gray-700">Hızlı İşlem</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-blue-500 text-2xl mb-2">🛡️</div>
+            <p className="text-xs sm:text-sm font-medium text-gray-700">Güvenli</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-blue-500 text-2xl mb-2">24/7</div>
+            <p className="text-xs sm:text-sm font-medium text-gray-700">Her Zaman</p>
+          </div>
         </div>
-
-        <div>
-          <label className="block text-sm font-semibold mb-2">Saat</label>
-          <input
-            type="time"
-            value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-          />
-        </div>
-
-        <button
-          onClick={handleBook}
-          disabled={loading}
-          className="w-full bg-blue-500 text-white rounded px-4 py-2 hover:bg-blue-600 disabled:opacity-50"
-        >
-          {loading ? 'Yükleniyor...' : 'Randevu Al'}
-        </button>
       </div>
     </div>
   );

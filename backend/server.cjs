@@ -35,6 +35,7 @@ pool.getConnection().then(conn => {
 const expertsRouter = require('./routes/experts.cjs');
 const availabilityRouter = require('./routes/availability.cjs');
 const appointmentsRouter = require('./routes/appointments.cjs');
+const authRouter = require('./routes/auth.cjs');
 
 // Health check route
 app.get('/api/health', async (req, res) => {
@@ -49,6 +50,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Register routes
+app.use('/api/auth', authRouter);
 app.use('/api/experts', expertsRouter(pool));
 app.use('/api/availability', availabilityRouter(pool));
 app.use('/api/appointments', appointmentsRouter(pool));

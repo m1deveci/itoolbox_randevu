@@ -1,23 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Users, Clock, Settings } from 'lucide-react';
 import { ExpertManagement } from './components/ExpertManagement';
 import { AvailabilityManager } from './components/AvailabilityManager';
 import { AppointmentBooking } from './components/AppointmentBooking';
 import { AppointmentManagement } from './components/AppointmentManagement';
+import { AdminLogin } from './components/AdminLogin';
 
 type View = 'booking' | 'experts' | 'availability' | 'appointments';
 
 function App() {
   const [view, setView] = useState<View>('booking');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUser, setAdminUser] = useState<any>(null);
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Check for saved admin session on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('adminUser');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        setAdminUser(user);
+        setIsAdmin(true);
+      } catch (error) {
+        localStorage.removeItem('adminUser');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminUser');
+    setAdminUser(null);
+    setIsAdmin(false);
+    setShowLogin(false);
+    setView('booking');
+  };
+
+  const handleLoginSuccess = (user: any) => {
+    setAdminUser(user);
+    setIsAdmin(true);
+    setShowLogin(false);
+  };
+
+  if (showLogin && !isAdmin) {
+    return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
+  }
 
   if (!isAdmin) {
     return (
       <div>
         <AppointmentBooking />
         <button
-          onClick={() => setIsAdmin(true)}
-          className="fixed bottom-4 right-4 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-lg"
+          onClick={() => setShowLogin(true)}
+          className="fixed bottom-4 right-4 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg text-sm sm:text-base font-medium"
         >
           Admin Paneli
         </button>
@@ -75,14 +110,23 @@ function App() {
               </button>
             </div>
 
-            {/* Logout Button */}
-            <button
-              onClick={() => setIsAdmin(false)}
-              className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:text-gray-900 transition flex-shrink-0 bg-gray-100 hover:bg-gray-200 rounded"
-            >
-              <span className="hidden sm:inline">Randevu</span>
-              <span className="sm:hidden">←</span>
-            </button>
+            {/* User Info & Logout */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="hidden sm:block text-right">
+                <p className="text-xs font-medium text-gray-900">{adminUser?.name}</p>
+                <p className="text-xs text-gray-500">{adminUser?.role === 'superadmin' ? 'Süper Admin' : 'Admin'}</p>
+              </div>
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                {adminUser?.name?.charAt(0).toUpperCase()}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 rounded"
+              >
+                <span className="hidden sm:inline">Çıkış</span>
+                <span className="sm:hidden">←</span>
+              </button>
+            </div>
           </div>
         </div>
       </nav>

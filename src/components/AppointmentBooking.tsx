@@ -11,8 +11,21 @@ export function AppointmentBooking() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  const isWeekend = (dateString: string) => {
+    const date = new Date(dateString + 'T00:00:00');
+    const day = date.getDay();
+    return day === 0 || day === 6; // 0 = Pazar, 6 = Cumartesi
+  };
+
   useEffect(() => {
     loadExperts();
+    // Set today's date as default
+    setSelectedDate(getTodayDate());
   }, []);
 
   const loadExperts = async () => {
@@ -34,6 +47,11 @@ export function AppointmentBooking() {
 
     if (!email.includes('@')) {
       alert('Lütfen geçerli bir e-posta adresi giriniz');
+      return;
+    }
+
+    if (isWeekend(selectedDate)) {
+      alert('Hafta sonu günlerinde randevu alamazsınız. Lütfen hafta içi bir gün seçiniz.');
       return;
     }
 
@@ -156,8 +174,16 @@ export function AppointmentBooking() {
             </label>
             <input
               type="date"
+              min={getTodayDate()}
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                const date = e.target.value;
+                if (isWeekend(date)) {
+                  alert('Hafta sonu günleri seçilemez. Lütfen Pazartesi-Cuma arasında bir gün seçiniz.');
+                  return;
+                }
+                setSelectedDate(date);
+              }}
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
           </div>
@@ -173,14 +199,15 @@ export function AppointmentBooking() {
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             >
               <option value="">-- Saat Seçiniz --</option>
-              {Array.from({ length: 24 }, (_, i) => {
-                const hour = String(i).padStart(2, '0');
-                return (
-                  <option key={i} value={`${hour}:00`}>
-                    {hour}:00
-                  </option>
-                );
-              })}
+              <optgroup label="Sabah (09:00 - 11:00)">
+                <option value="09:00">09:00</option>
+                <option value="10:00">10:00</option>
+              </optgroup>
+              <optgroup label="Öğleden Sonra (13:00 - 16:00)">
+                <option value="13:00">13:00</option>
+                <option value="14:00">14:00</option>
+                <option value="15:00">15:00</option>
+              </optgroup>
             </select>
           </div>
 

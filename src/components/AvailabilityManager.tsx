@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import { Clock, Plus, Trash2, Zap, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Availability {
   id: string;
@@ -15,6 +15,8 @@ export function AvailabilityManager() {
     startTime: '09:00',
     endTime: '17:00'
   });
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupMessage, setSetupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     // TODO: Fetch from API
@@ -85,15 +87,94 @@ export function AvailabilityManager() {
     }
   };
 
+  const handleAutoSetup = async () => {
+    if (!window.confirm('Tüm uzmanlar için Pazartesi-Cuma günleri 09:00-11:00 ve 13:00-16:00 saatleri müsait olarak işaretlenecektir. Devam etmek istediğinize emin misiniz?')) {
+      return;
+    }
+
+    setSetupLoading(true);
+    setSetupMessage(null);
+
+    try {
+      const response = await fetch('/api/availability/setup/all-experts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setSetupMessage({
+          type: 'error',
+          text: data.error || 'Otomatik kurulum sırasında hata oluştu'
+        });
+        return;
+      }
+
+      // Reload availabilities
+      await loadAvailabilities();
+
+      setSetupMessage({
+        type: 'success',
+        text: `${data.created} müsaitlik başarıyla oluşturuldu`
+      });
+
+      setTimeout(() => setSetupMessage(null), 5000);
+    } catch (error) {
+      console.error('Error during auto-setup:', error);
+      setSetupMessage({
+        type: 'error',
+        text: 'Otomatik kurulum sırasında bir hata oluştu'
+      });
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   const dayNames = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4 sm:mb-6">
-        <Clock className="w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0" />
-        <h2 className="text-xl sm:text-2xl font-bold">Müsaitlik Yönetimi</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0" />
+          <h2 className="text-xl sm:text-2xl font-bold">Müsaitlik Yönetimi</h2>
+        </div>
+        <button
+          onClick={handleAutoSetup}
+          disabled={setupLoading}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
+        >
+          <Zap className="w-4 h-4" />
+          <span className="hidden sm:inline">Tümü Kur</span>
+          <span className="sm:hidden">Kur</span>
+        </button>
       </div>
+
+      {/* Setup Message */}
+      {setupMessage && (
+        <div
+          className={`flex items-center gap-3 p-4 rounded-lg ${
+            setupMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+          }`}
+        >
+          {setupMessage.type === 'success' ? (
+            <CheckCircle className="text-green-600 flex-shrink-0" size={20} />
+          ) : (
+            <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
+          )}
+          <p
+            className={`text-sm ${
+              setupMessage.type === 'success' ? 'text-green-700' : 'text-red-700'
+            }`}
+          >
+            {setupMessage.text}
+          </p>
+        </div>
+      )}
 
       {/* Add Availability Form */}
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">

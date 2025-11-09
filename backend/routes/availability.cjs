@@ -162,5 +162,58 @@ module.exports = (pool) => {
     }
   });
 
+  // POST /api/availability/setup/all-experts - Auto-setup availability for all experts
+  router.post('/setup/all-experts', async (req, res) => {
+    try {
+      // Get all experts
+      const [experts] = await pool.execute('SELECT id FROM experts');
+
+      if (experts.length === 0) {
+        return res.status(400).json({ error: 'No experts found' });
+      }
+
+      // Define setup: Pazartesi-Cuma (1-5), Morning (09:00-11:00), Afternoon (13:00-16:00)
+      const timeSlots = [
+        { startTime: '09:00', endTime: '11:00' }, // Morning
+        { startTime: '13:00', endTime: '16:00' }  // Afternoon
+      ];
+
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      for (const expert of experts) {
+        // Pazartesi (1) to Cuma (5)
+        for (let day = 1; day <= 5; day++) {
+          for (const slot of timeSlots) {
+            try {
+              await pool.execute(
+                'INSERT INTO availability (expert_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)',
+                [expert.id, day, slot.startTime, slot.endTime]
+              );
+              createdCount++;
+            } catch (error) {
+              if (error.code === 'ER_DUP_ENTRY') {
+                skippedCount++;
+              } else {
+                throw error;
+              }
+            }
+          }
+        }
+      }
+
+      res.json({
+        message: 'Auto-setup completed successfully',
+        created: createdCount,
+        skipped: skippedCount,
+        experts: experts.length,
+        totalSlots: experts.length * 5 * timeSlots.length
+      });
+    } catch (error) {
+      console.error('Error during auto-setup:', error);
+      res.status(500).json({ error: 'Failed to setup availability' });
+    }
+  });
+
   return router;
 };

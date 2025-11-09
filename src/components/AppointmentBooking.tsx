@@ -167,12 +167,21 @@ export function AppointmentBooking() {
             <label className="block text-sm font-semibold text-gray-900 mb-2">
               Tercih Ettiğiniz Saat <span className="text-red-500">*</span>
             </label>
-            <input
-              type="time"
+            <select
               value={selectedTime}
               onChange={(e) => setSelectedTime(e.target.value)}
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-            />
+            >
+              <option value="">-- Saat Seçiniz --</option>
+              {Array.from({ length: 24 }, (_, i) => {
+                const hour = String(i).padStart(2, '0');
+                return (
+                  <option key={i} value={`${hour}:00`}>
+                    {hour}:00
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           {/* Submit Button */}

@@ -569,7 +569,8 @@ IT Randevu Sistemi
           <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
           <p><strong>Çalışan:</strong> ${appointment.user_name}</p>
           <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
-          <p style="margin-bottom: 0;"><strong>Yeni Atanan Uzman:</strong> <span style="color: #10b981; font-weight: bold;">${newExpert.name}</span></p>
+          <p><strong>Yeni Atanan Uzman:</strong> <span style="color: #10b981; font-weight: bold;">${newExpert.name}</span></p>
+          <p style="margin-bottom: 0;"><strong>Taşıma Sebebi:</strong> ${appointment.reassignment_reason || 'Belirtilmemiş'}</p>
         </div>
 
         <p style="color: #6b7280; padding: 15px; background-color: #f3f4f6; border-radius: 8px;">
@@ -661,11 +662,12 @@ IT Randevu Sistemi
           <p><strong>E-posta:</strong> ${appointment.user_email}</p>
           <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
           <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
-          <p style="margin-bottom: 0;"><strong>Önceki Atanan:</strong> ${oldExpert.name}</p>
+          <p><strong>Önceki Atanan:</strong> ${oldExpert.name}</p>
+          <p style="margin-bottom: 0;"><strong>Taşıma Sebebi:</strong> ${appointment.reassignment_reason || 'Belirtilmemiş'}</p>
         </div>
 
         <p style="padding: 15px; background-color: #f0f9ff; border-radius: 8px; color: #1e40af; font-size: 13px;">
-          <strong>Lütfen Dikkat:</strong> Bu randevu önceden başka bir uzman tarafından alınmıştı. Lütfen taşıma nedenini göz önünde bulundurunuz.
+          <strong>Lütfen Dikkat:</strong> Bu randevu önceden başka bir uzman tarafından alınmıştı. Taşıma sebebi yukarıda belirtilmiştir.
         </p>
 
         <p>Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz. Randevuyu onayladığında, müşteriye ve önceki atanan uzmanına bildirim gönderilecektir.</p>
@@ -767,6 +769,14 @@ IT Randevu Sistemi
               </td>
               <td style="padding: 8px; background-color: #f0fdf4;">
                 ${newExpert.name}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; background-color: #f3f4f6; border-right: 1px solid #d1d5db;">
+                <strong style="color: #3b82f6;">Taşıma Sebebi:</strong>
+              </td>
+              <td style="padding: 8px; background-color: #eff6ff;">
+                ${appointment.reassignment_reason || 'Belirtilmemiş'}
               </td>
             </tr>
           </table>

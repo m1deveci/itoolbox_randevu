@@ -10,6 +10,11 @@ const {
   sendReassignmentNotificationToUser
 } = require('../utils/emailHelper.cjs');
 
+// Helper function to get reassignment reason from request body
+function getReassignmentReason(req) {
+  return req.body?.reassignmentReason || null;
+}
+
 module.exports = (pool) => {
   // GET /api/appointments - Get appointments with optional filtering
   router.get('/', async (req, res) => {
@@ -562,10 +567,13 @@ module.exports = (pool) => {
         return res.status(409).json({ error: 'Time slot is already booked for new expert' });
       }
 
-      // Update appointment with new expert
+      // Get reassignment reason from request
+      const reassignmentReason = req.body?.reassignmentReason || null;
+
+      // Update appointment with new expert and reassignment reason
       const [result] = await pool.execute(
-        'UPDATE appointments SET expert_id = ? WHERE id = ?',
-        [newExpertId, appointmentId]
+        'UPDATE appointments SET expert_id = ?, reassignment_reason = ? WHERE id = ?',
+        [newExpertId, reassignmentReason, appointmentId]
       );
 
       if (result.affectedRows === 0) {

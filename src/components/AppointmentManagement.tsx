@@ -354,6 +354,32 @@ export function AppointmentManagement({ adminUser }: Props) {
       return;
     }
 
+    // Ask for reassignment reason
+    const { value: reassignmentReason } = await Swal.fire({
+      title: 'Atama Değişikliği Sebebi',
+      input: 'textarea',
+      inputPlaceholder: 'Atama değişikliğinin nedenini yazın...',
+      inputAttributes: {
+        'aria-label': 'Atama değişikliği sebebi'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Devam Et',
+      cancelButtonText: 'Vazgeç',
+      confirmButtonColor: '#3b82f6',
+      inputValidator: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Lütfen atama değişikliğinin sebebini giriniz!';
+        }
+        if (value.trim().length < 10) {
+          return 'Sebebi en az 10 karakter olmalıdır!';
+        }
+      }
+    });
+
+    if (!reassignmentReason) {
+      return;
+    }
+
     try {
       const response = await fetch(`/api/appointments/${appointmentId}/reassign-expert`, {
         method: 'PUT',
@@ -362,7 +388,7 @@ export function AppointmentManagement({ adminUser }: Props) {
           'x-user-id': adminUser?.id?.toString() || '',
           'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         },
-        body: JSON.stringify({ newExpertId: parseInt(selectedExpertId) })
+        body: JSON.stringify({ newExpertId: parseInt(selectedExpertId), reassignmentReason: reassignmentReason.trim() })
       });
 
       if (!response.ok) {

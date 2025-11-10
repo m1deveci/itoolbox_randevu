@@ -55,6 +55,7 @@ export function AppointmentBooking() {
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showBackupLinks, setShowBackupLinks] = useState(false);
+  const [minimumBookingHours, setMinimumBookingHours] = useState(3);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -69,6 +70,7 @@ export function AppointmentBooking() {
 
   useEffect(() => {
     loadExperts();
+    loadMinimumBookingHours();
     // Set today's date as default
     setSelectedDate(getTodayDate());
   }, []);
@@ -92,6 +94,24 @@ export function AppointmentBooking() {
       setExperts(data);
     } catch (error) {
       console.error('Error loading experts:', error);
+    }
+  };
+
+  const loadMinimumBookingHours = async () => {
+    try {
+      const response = await fetch('/api/settings/minimum_booking_hours');
+      if (!response.ok) {
+        // Default to 3 if not found
+        setMinimumBookingHours(3);
+        return;
+      }
+      const data = await response.json();
+      const hours = parseInt(data.value || '3');
+      setMinimumBookingHours(hours);
+    } catch (error) {
+      console.error('Error loading minimum booking hours:', error);
+      // Default to 3 on error
+      setMinimumBookingHours(3);
     }
   };
 
@@ -160,15 +180,19 @@ export function AppointmentBooking() {
     // Sort and remove duplicates
     let uniqueSlots = [...new Set(timeSlots)].sort();
 
-    // Filter out past times if selected date is today
+    // Filter out times that don't meet minimum booking hours requirement
     const todayDate = getTodayDate();
     if (selectedDate === todayDate) {
       const now = new Date();
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-      // Only show times that are greater than current time
+      // Calculate minimum booking time (current time + minimum hours)
+      const minBookingDate = new Date(now.getTime() + minimumBookingHours * 60 * 60 * 1000);
+      const minBookingTime = `${String(minBookingDate.getHours()).padStart(2, '0')}:${String(minBookingDate.getMinutes()).padStart(2, '0')}`;
+
+      // Only show times that are at least minimum booking hours from now
       uniqueSlots = uniqueSlots.filter((slot) => {
-        return slot > currentTime;
+        return slot > minBookingTime;
       });
     }
 

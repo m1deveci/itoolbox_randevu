@@ -211,6 +211,23 @@ module.exports = (pool) => {
         });
       }
 
+      // Get minimum booking hours from settings (default: 3 hours)
+      const [minHoursSettings] = await pool.execute(
+        'SELECT value FROM settings WHERE key_name = "minimum_booking_hours"'
+      );
+      const minimumBookingHours = parseInt(minHoursSettings[0]?.value || '3');
+
+      // Check if appointment is at least minimum_booking_hours from now
+      const now = new Date();
+      const appointmentDateTime = new Date(appointmentDate + 'T' + appointmentTime);
+      const hoursUntilAppointment = (appointmentDateTime - now) / (1000 * 60 * 60);
+
+      if (hoursUntilAppointment < minimumBookingHours) {
+        return res.status(400).json({
+          error: `Randevu saatinden en az ${minimumBookingHours} saat önce randevu almalısınız.`
+        });
+      }
+
       const [result] = await pool.execute(
         `INSERT INTO appointments (expert_id, user_name, user_email, user_phone, ticket_no, appointment_date, appointment_time, status, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,

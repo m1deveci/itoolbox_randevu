@@ -360,6 +360,39 @@ export function SettingsPage({ adminUser }: Props) {
               Kaydet
             </button>
           </div>
+
+          {/* Minimum Booking Hours */}
+          <div className="border-t pt-6">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Minimum Randevu Süresi (Saat)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="24"
+              value={settings.minimum_booking_hours?.value || '3'}
+              onChange={(e) => setSettings(prev => ({
+                ...prev,
+                minimum_booking_hours: { ...prev.minimum_booking_hours, value: e.target.value }
+              }))}
+              placeholder="3"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition max-w-xs"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Kullanıcılar randevu saatinden en az bu kadar saat önce randevu almalıdır. Örneğin: 3 saat, şu anki saatin 3 saat sonrasından itibaren randevu alınabilir.
+            </p>
+            <p className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
+              💡 <strong>Mevcut Ayar:</strong> {settings.minimum_booking_hours?.value || '3'} saat
+            </p>
+            <button
+              onClick={() => handleSave('minimum_booking_hours')}
+              disabled={saving}
+              className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+            >
+              <Save size={16} className="inline mr-2" />
+              Kaydet
+            </button>
+          </div>
         </div>
       )}
 

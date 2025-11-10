@@ -217,7 +217,19 @@ export function AppointmentBooking() {
       const availResponse = await fetch(`/api/availability?expertId=${selectedExpert}`);
       if (!availResponse.ok) throw new Error('Failed to fetch availability');
       const availData = await availResponse.json();
-      setAvailabilities(availData);
+
+      // Parse ISO dates to YYYY-MM-DD format
+      const parsedAvailabilities = availData.map((a: any) => {
+        const dateObj = new Date(a.availability_date);
+        const dateString = dateObj.toISOString().split('T')[0];
+
+        return {
+          ...a,
+          availability_date: dateString
+        };
+      });
+
+      setAvailabilities(parsedAvailabilities);
 
       // Load existing appointments for this expert and date
       const apptResponse = await fetch(`/api/appointments?expertId=${selectedExpert}&date=${selectedDate}`);
@@ -226,7 +238,7 @@ export function AppointmentBooking() {
       setExistingAppointments(apptData.appointments || []);
 
       // Calculate available time slots
-      calculateAvailableTimes(availData, apptData.appointments || []);
+      calculateAvailableTimes(parsedAvailabilities, apptData.appointments || []);
     } catch (error) {
       console.error('Error loading availability:', error);
       setAvailableTimes([]);
@@ -531,7 +543,7 @@ export function AppointmentBooking() {
             />
           </button>
 
-       {/* Accordion Content */}
+  {/* Accordion Content */}
 {showBackupLinks && (
   <div className="mt-2 bg-white border-2 border-blue-200 border-t-0 rounded-b-lg p-4 sm:p-6 animate-in fade-in duration-200">
     <p className="text-xs sm:text-sm text-gray-600 mb-4">
@@ -553,7 +565,7 @@ export function AppointmentBooking() {
 
       {/* WhatsApp iPhone Yedekleme */}
       <a
-        href="https://faq.whatsapp.com/iphone/chats/how-to-back-up-your-chat-history/?lang=tr"
+        href="https://faq.whatsapp.com/481135090640375/?cms_platform=iphone&helpref=hc_fnav"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
@@ -562,9 +574,9 @@ export function AppointmentBooking() {
         <span>WhatsApp Resmî Makalesi: iPhone'da Sohbet Yedeği Alma</span>
       </a>
 
-      {/* Samsung Yedekleme */}
+      {/* Samsung Yedekleme (TR) */}
       <a
-        href="https://www.samsung.com/tr/support/apps-services/how-to-back-up-data-on-your-galaxy-phone/"
+        href="https://www.samsung.com/tr/support/mobile-devices/how-can-i-back-up-my-mobile-phone/"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
@@ -576,6 +588,7 @@ export function AppointmentBooking() {
     </div>
   </div>
 )}
+
 
         </div>
 

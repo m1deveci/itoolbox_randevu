@@ -251,17 +251,12 @@ module.exports = (pool) => {
 
       const expert = experts[0];
 
-      // Check if expert has availability for this date and time
-      const appointmentDateObj = new Date(appointmentDate + 'T00:00:00');
-      const dayOfWeek = appointmentDateObj.getDay(); // 0=Sunday, 1=Monday, etc.
-      // Convert to our day format (Monday=0, Sunday=6)
-      const dayOfWeekFormatted = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
-      // Get expert's availabilities for this day of week
+      // Check if expert has availability for this date
+      // Get expert's availabilities for this specific date
       const [availabilities] = await pool.execute(
         `SELECT start_time, end_time FROM availability
-         WHERE expert_id = ? AND day_of_week = ?`,
-        [expertId, dayOfWeekFormatted]
+         WHERE expert_id = ? AND availability_date = ?`,
+        [expertId, appointmentDate]
       );
 
       if (availabilities.length === 0) {

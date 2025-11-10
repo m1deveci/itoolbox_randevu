@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Search, ExternalLink, Download } from 'lucide-react';
+import { Calendar, Clock, User, Search, ExternalLink, Download, ChevronDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface Availability {
@@ -54,6 +54,7 @@ export function AppointmentBooking() {
   const [statusAppointments, setStatusAppointments] = useState<any[]>([]);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showBackupLinks, setShowBackupLinks] = useState(false);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -339,57 +340,74 @@ export function AppointmentBooking() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8 flex items-center">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Left Sidebar - Backup Links (Fixed) */}
-          <div className="lg:col-span-1">
-            <div className="lg:sticky lg:top-6">
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Download className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                    Yedekleme ile İlgili Faydalı Bağlantılar
-                  </h3>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-4">
-                  Randevu öncesinde verilerinizi yedeklemeniz önerilir. Aşağıdaki bağlantılardan yedekleme işlemlerinizi kolayca yapabilirsiniz:
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8">
+      <div className="w-full max-w-4xl mx-auto">
+
+        {/* Backup Links Accordion - Top of Page */}
+        <div className="mb-8">
+          <button
+            onClick={() => setShowBackupLinks(!showBackupLinks)}
+            className="w-full bg-blue-50 border-2 border-blue-200 rounded-lg p-4 sm:p-6 hover:bg-blue-100 transition flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3 text-left">
+              <Download className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+                  Yedekleme ile İlgili Faydalı Bağlantılar
+                </h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  {showBackupLinks ? 'Gizle' : 'Tıklayarak göster'}
                 </p>
-                <div className="space-y-3">
-                  <a
-                    href="https://youtube.com/shorts/V94yOBj7aJY?si=vNVkPGDzeLHMC3ca"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
-                  >
-                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                    <span>iCloud Yedeği Alma</span>
-                  </a>
-                  <a
-                    href="https://www.youtube.com/watch?v=6v2v0Zkrves"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
-                  >
-                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                    <span>iPhone WhatsApp Yedekleme</span>
-                  </a>
-                  <a
-                    href="https://www.youtube.com/watch?v=9J29mDVdpNo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
-                  >
-                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                    <span>Samsung WhatsApp Yedekleme</span>
-                  </a>
-                </div>
               </div>
             </div>
-          </div>
+            <ChevronDown
+              className={`w-5 h-5 text-blue-600 flex-shrink-0 transition-transform duration-300 ${
+                showBackupLinks ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
 
-          {/* Right Side - Booking Form */}
-          <div className="lg:col-span-2">
+          {/* Accordion Content */}
+          {showBackupLinks && (
+            <div className="mt-2 bg-white border-2 border-blue-200 border-t-0 rounded-b-lg p-4 sm:p-6 animate-in fade-in duration-200">
+              <p className="text-xs sm:text-sm text-gray-600 mb-4">
+                Randevu öncesinde verilerinizi yedeklemeniz önerilir. Aşağıdaki bağlantılardan yedekleme işlemlerinizi kolayca yapabilirsiniz:
+              </p>
+              <div className="space-y-2">
+                <a
+                  href="https://youtube.com/shorts/V94yOBj7aJY?si=vNVkPGDzeLHMC3ca"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+                >
+                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                  <span>iCloud Yedeği Alma</span>
+                </a>
+                <a
+                  href="https://www.youtube.com/watch?v=6v2v0Zkrves"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+                >
+                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                  <span>iPhone WhatsApp Yedekleme</span>
+                </a>
+                <a
+                  href="https://www.youtube.com/watch?v=9J29mDVdpNo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+                >
+                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                  <span>Samsung WhatsApp Yedekleme</span>
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Booking Section */}
+        <div className="w-full">
             {/* Header */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-4">
@@ -413,34 +431,34 @@ export function AppointmentBooking() {
             </div>
 
             {/* Booking Form */}
-            <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+            <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 lg:p-8">
               {/* Progress Indicator */}
               <div className="mb-6">
-                <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4">
                   <div className={`flex items-center ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                    <div className={`w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm ${
                       currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>
                       1
                     </div>
-                    <span className="ml-2 text-sm font-medium hidden sm:inline">Kişisel Bilgiler</span>
+                    <span className="ml-1 sm:ml-2 text-xs sm:text-sm font-medium hidden sm:inline">Kişisel</span>
                   </div>
-                  <div className={`w-12 h-1 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+                  <div className={`w-8 sm:w-12 h-1 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
                   <div className={`flex items-center ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                    <div className={`w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm ${
                       currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>
                       2
                     </div>
-                    <span className="ml-2 text-sm font-medium hidden sm:inline">Randevu Detayları</span>
+                    <span className="ml-1 sm:ml-2 text-xs sm:text-sm font-medium hidden sm:inline">Detaylar</span>
                   </div>
                 </div>
               </div>
 
               {/* Step 1: Personal Information */}
               {currentStep === 1 && (
-                <div className="space-y-5 sm:space-y-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Kişisel Bilgileriniz</h3>
+                <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Kişisel Bilgileriniz</h3>
                   
                   {/* Full Name */}
                   <div>
@@ -518,9 +536,9 @@ export function AppointmentBooking() {
 
             {/* Step 2: Appointment Details */}
             {currentStep === 2 && (
-              <div className="space-y-5 sm:space-y-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Randevu Detayları</h3>
+              <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Randevu Detayları</h3>
                   <button
                     onClick={() => setCurrentStep(1)}
                     className="text-sm text-gray-600 hover:text-gray-900"
@@ -530,22 +548,22 @@ export function AppointmentBooking() {
                 </div>
 
                 {/* Ticket Info */}
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                  <div className="flex items-start gap-3">
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 sm:p-4 rounded">
+                  <div className="flex items-start gap-2 sm:gap-3">
                     <div className="flex-shrink-0">
-                      <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 sm:w-5 h-4 sm:h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm text-blue-800 font-medium mb-1">
+                      <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
                         Önemli: Randevu almadan önce Ravago SSP üzerinden Ticket açılması gerekmektedir.
                       </p>
                       <a
                         href="https://itservice.ravago.com"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
+                        className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 underline font-medium break-all"
                       >
                         RAVAGO SSP (itservice.ravago.com) →
                       </a>
@@ -674,7 +692,6 @@ export function AppointmentBooking() {
               </div>
             )}
             </div>
-          </div>
         </div>
       </div>
 
@@ -682,7 +699,7 @@ export function AppointmentBooking() {
       {showStatusModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Randevu Durumu Sorgula</h2>
                 <button
@@ -702,7 +719,7 @@ export function AppointmentBooking() {
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   E-posta Adresiniz
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
                     value={statusEmail}
@@ -714,7 +731,7 @@ export function AppointmentBooking() {
                   <button
                     onClick={handleCheckStatus}
                     disabled={loadingStatus}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium text-sm"
+                    className="px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium text-sm whitespace-nowrap"
                   >
                     {loadingStatus ? 'Sorgulanıyor...' : 'Sorgula'}
                   </button>
@@ -729,31 +746,33 @@ export function AppointmentBooking() {
                   </h3>
                   <div className="space-y-3">
                     {statusAppointments.map((apt: any) => (
-                      <div key={apt.id} className="border-2 border-gray-200 rounded-lg p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div className="flex-1">
-                            <p className="font-semibold text-gray-900">{apt.user_name}</p>
-                            <p className="text-sm text-gray-600">{apt.expert_name}</p>
-                            {apt.ticket_no && (
-                              <p className="text-sm text-gray-600 font-mono">Ticket: {apt.ticket_no}</p>
-                            )}
-                            <p className="text-sm text-gray-600">
-                              {new Date(apt.date).toLocaleDateString('tr-TR', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })} - {apt.time.substring(0, 5)}
-                            </p>
-                            {apt.status === 'cancelled' && apt.cancellation_reason && (
-                              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm">
-                                <p className="font-medium text-red-800 mb-1">İptal Sebebi:</p>
-                                <p className="text-red-700">{apt.cancellation_reason}</p>
-                              </div>
-                            )}
+                      <div key={apt.id} className="border-2 border-gray-200 rounded-lg p-3 sm:p-4">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900 text-sm sm:text-base">{apt.user_name}</p>
+                              <p className="text-xs sm:text-sm text-gray-600">{apt.expert_name}</p>
+                            </div>
+                            <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium flex-shrink-0 ${getStatusColor(apt.status)}`}>
+                              {getStatusText(apt.status)}
+                            </span>
                           </div>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(apt.status)}`}>
-                            {getStatusText(apt.status)}
-                          </span>
+                          {apt.ticket_no && (
+                            <p className="text-xs sm:text-sm text-gray-600 font-mono break-all">Ticket: {apt.ticket_no}</p>
+                          )}
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            {new Date(apt.date).toLocaleDateString('tr-TR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })} - {apt.time.substring(0, 5)}
+                          </p>
+                          {apt.status === 'cancelled' && apt.cancellation_reason && (
+                            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs sm:text-sm">
+                              <p className="font-medium text-red-800 mb-1">İptal Sebebi:</p>
+                              <p className="text-red-700">{apt.cancellation_reason}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

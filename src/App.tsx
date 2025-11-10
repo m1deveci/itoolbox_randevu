@@ -13,13 +13,13 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
   const navigate = useNavigate();
   const [notificationCount, setNotificationCount] = useState(0);
 
-  // Load pending appointments count
+  // Load pending appointments count for current superadmin
   useEffect(() => {
     const loadPendingCount = async () => {
-      if (!adminUser?.role === 'superadmin') return;
+      if (adminUser?.role !== 'superadmin') return;
 
       try {
-        const response = await fetch('/api/appointments?status=pending');
+        const response = await fetch(`/api/appointments?status=pending&expertId=${adminUser.id}`);
         if (!response.ok) throw new Error('Failed to fetch appointments');
         const data = await response.json();
         const pendingCount = data.appointments?.filter((a: any) => a.status === 'pending').length || 0;

@@ -381,11 +381,23 @@ export function AvailabilityManager({ adminUser }: Props) {
         throw new Error(data.error || 'Müsaitlik eklenirken hata oluştu');
       }
 
-      // Reload availabilities and time slots
-      await loadAvailabilities();
-      // Small delay to ensure state is updated
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadTimeSlotsForDate(selectedDate);
+      // Add new availability to state immediately
+      const newAvailability: Availability = {
+        id: result.id.toString(),
+        availabilityDate: selectedDate,
+        startTime: timeSlot,
+        endTime: endTime
+      };
+
+      setAvailabilities([...availabilities, newAvailability]);
+
+      // Also load time slots for the date
+      const dateObj = new Date(selectedDate + 'T00:00:00');
+      const dayOfWeek = getDayOfWeek(dateObj);
+      const dayName = dayNames[dayOfWeek];
+
+      // Update selected time slots
+      setSelectedTimeSlots([...selectedTimeSlots, timeSlot].sort());
 
       await Swal.fire({
         icon: 'success',
@@ -394,9 +406,6 @@ export function AvailabilityManager({ adminUser }: Props) {
         confirmButtonColor: '#3b82f6',
         timer: 1500
       });
-
-      // Force re-render by reloading availabilities again
-      await loadAvailabilities();
     } catch (error) {
       console.error('Error adding availability:', error);
       await Swal.fire({
@@ -454,13 +463,13 @@ export function AvailabilityManager({ adminUser }: Props) {
       });
       
       if (!response.ok) throw new Error('Failed to delete availability');
-      
-      // Reload availabilities and time slots
-      await loadAvailabilities();
-      // Small delay to ensure state is updated
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadTimeSlotsForDate(selectedDate);
-      
+
+      // Remove from state immediately
+      setAvailabilities(availabilities.filter(a => a.id !== availability.id));
+
+      // Remove from time slots
+      setSelectedTimeSlots(selectedTimeSlots.filter(slot => slot !== timeSlot));
+
       await Swal.fire({
         icon: 'success',
         title: 'Başarılı',
@@ -468,9 +477,6 @@ export function AvailabilityManager({ adminUser }: Props) {
         confirmButtonColor: '#3b82f6',
         timer: 1500
       });
-      
-      // Force re-render by reloading availabilities again
-      await loadAvailabilities();
     } catch (error) {
       console.error('Error deleting availability:', error);
       await Swal.fire({
@@ -590,9 +596,13 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       await Promise.all(deletePromises);
 
-      await loadAvailabilities();
+      // Remove deleted availabilities from state immediately
+      const remainingAvailabilities = availabilities.filter(a => a.availabilityDate !== dateStr);
+      setAvailabilities(remainingAvailabilities);
+
+      // If viewing this date, update time slots
       if (selectedDate === dateStr) {
-        await loadTimeSlotsForDate(selectedDate);
+        setSelectedTimeSlots([]);
       }
 
       await Swal.fire({
@@ -641,7 +651,7 @@ export function AvailabilityManager({ adminUser }: Props) {
                 onChange={(e) => {
                   const expertId = parseInt(e.target.value);
                   setSelectedExpertId(expertId);
-                  setSelectedDate(''); // Reset selected date when expert changes
+                  // Don't reset date - keep current date for new expert
                 }}
                 className="w-full sm:w-auto border-2 border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
               >

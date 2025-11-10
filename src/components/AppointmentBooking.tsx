@@ -257,8 +257,27 @@ export function AppointmentBooking() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to book appointment');
+        const errorData = await response.json();
+        const errorMessage = errorData.error || 'Randevu oluştururken hata oluştu';
+
+        // Handle different error statuses
+        if (response.status === 409) {
+          // Conflict - duplicate appointment or time slot already booked
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Randevu Oluşturulamadı',
+            text: errorMessage,
+            confirmButtonColor: '#f59e0b'
+          });
+        } else {
+          await Swal.fire({
+            icon: 'error',
+            title: 'Hata',
+            text: errorMessage,
+            confirmButtonColor: '#ef4444'
+          });
+        }
+        return;
       }
 
       await Swal.fire({

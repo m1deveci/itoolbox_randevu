@@ -197,6 +197,20 @@ module.exports = (pool) => {
         return res.status(409).json({ error: 'Time slot is already booked' });
       }
 
+      // Check if user with same email and phone already has an active appointment
+      const [duplicateAppointments] = await pool.execute(
+        `SELECT id, expert_id, appointment_date, appointment_time, status
+         FROM appointments
+         WHERE user_email = ? AND user_phone = ? AND status != 'cancelled'`,
+        [userEmail, userPhone]
+      );
+
+      if (duplicateAppointments.length > 0) {
+        return res.status(409).json({
+          error: 'Bu e-posta ve telefon numarası ile zaten aktif bir randevunuz bulunmaktadır. Lütfen mevcut randevunuzu iptal ettikten sonra yeni bir randevu oluşturunuz.'
+        });
+      }
+
       const [result] = await pool.execute(
         `INSERT INTO appointments (expert_id, user_name, user_email, user_phone, ticket_no, appointment_date, appointment_time, status, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,

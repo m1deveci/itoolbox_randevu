@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
+  sendAppointmentApprovalToExpert,
   sendAppointmentCancellationToUser
 } = require('../utils/emailHelper.cjs');
 
@@ -453,11 +454,19 @@ module.exports = (pool) => {
       }
 
       // Send email notification to user (async, don't wait for it)
-      sendAppointmentApprovalToUser(pool, appointment, { 
-        name: appointment.expert_name, 
-        email: appointment.expert_email || '' 
+      sendAppointmentApprovalToUser(pool, appointment, {
+        name: appointment.expert_name,
+        email: appointment.expert_email || ''
       }).catch(error => {
         console.error('Error sending approval email to user:', error);
+      });
+
+      // Send email notification to expert (async, don't wait for it)
+      sendAppointmentApprovalToExpert(pool, appointment, {
+        name: appointment.expert_name,
+        email: appointment.expert_email || ''
+      }).catch(error => {
+        console.error('Error sending approval email to expert:', error);
       });
 
       res.json({ message: 'Appointment approved successfully', status: 'approved' });

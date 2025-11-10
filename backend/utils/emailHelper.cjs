@@ -327,6 +327,104 @@ IT Randevu Sistemi
 }
 
 /**
+ * Send appointment approval notification to expert
+ */
+async function sendAppointmentApprovalToExpert(pool, appointment, expert) {
+  // Validate and parse appointment date
+  if (!appointment.appointment_date) {
+    console.error('Appointment date is missing');
+    return false;
+  }
+
+  let appointmentDate;
+  if (appointment.appointment_date instanceof Date) {
+    appointmentDate = appointment.appointment_date;
+  } else {
+    appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+  }
+
+  // Check if date is valid
+  if (isNaN(appointmentDate.getTime())) {
+    console.error('Invalid appointment date:', appointment.appointment_date);
+    return false;
+  }
+
+  const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const subject = `Randevuyu Onayladınız - ${formattedDate}`;
+  const text = `
+Merhaba ${expert.name},
+
+Randevu talebini onayladınız.
+
+Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- Müşteri: ${appointment.user_name}
+- E-posta: ${appointment.user_email}
+- Telefon: ${appointment.user_phone}
+- Ticket No: ${appointment.ticket_no}
+
+Bu randevu için takvim dosyası e-postaya eklenmiştir.
+
+İyi çalışmalar,
+IT Randevu Sistemi
+  `;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #10b981;">Randevuyu Onayladınız</h2>
+      <p>Merhaba <strong>${expert.name}</strong>,</p>
+      <p>Randevu talebini onayladınız.</p>
+
+      <div style="background-color: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+        <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
+        <p><strong>Tarih:</strong> ${formattedDate}</p>
+        <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+        <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+        <p><strong>E-posta:</strong> ${appointment.user_email}</p>
+        <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
+        <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+      </div>
+
+      <div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+        <p style="margin: 0; color: #1e40af; font-size: 13px;">
+          📅 <strong>Takvim Dosyası:</strong> E-postaya eklenen takvim dosyasını (.ics) indirerek Outlook, Google Calendar veya diğer takvim uygulamalarınıza ekleyebilirsiniz.
+        </p>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        İyi çalışmalar,<br>
+        IT Randevu Sistemi
+      </p>
+    </div>
+  `;
+
+  // Create iCalendar attachment
+  const icsContent = createICalendarContent(appointment, expert);
+  const attachments = [
+    {
+      filename: `randevu-${appointment.id || 'taslak'}.ics`,
+      content: icsContent,
+      contentType: 'text/calendar; method=REQUEST; charset="UTF-8"'
+    }
+  ];
+
+  return await sendEmail(pool, {
+    to: expert.email,
+    subject,
+    text,
+    html,
+    attachments
+  });
+}
+
+/**
  * Send appointment cancellation notification to user
  */
 async function sendAppointmentCancellationToUser(pool, appointment, expert, cancellationReason) {
@@ -411,6 +509,7 @@ module.exports = {
   sendEmail,
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
+  sendAppointmentApprovalToExpert,
   sendAppointmentCancellationToUser
 };
 

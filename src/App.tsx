@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Calendar, Users, Clock, Settings } from 'lucide-react';
+import { Calendar, Users, Clock, Settings, Bell } from 'lucide-react';
 import { ExpertManagement } from './components/ExpertManagement';
 import { AvailabilityManager } from './components/AvailabilityManager';
 import { AppointmentBooking } from './components/AppointmentBooking';
@@ -10,6 +10,30 @@ import { SettingsPage } from './components/SettingsPage';
 
 function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => void }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  // Load pending appointments count
+  useEffect(() => {
+    const loadPendingCount = async () => {
+      if (!adminUser?.role === 'superadmin') return;
+
+      try {
+        const response = await fetch('/api/appointments?status=pending');
+        if (!response.ok) throw new Error('Failed to fetch appointments');
+        const data = await response.json();
+        const pendingCount = data.appointments?.filter((a: any) => a.status === 'pending').length || 0;
+        setNotificationCount(pendingCount);
+      } catch (error) {
+        console.error('Error loading pending count:', error);
+      }
+    };
+
+    loadPendingCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(loadPendingCount, 30000);
+    return () => clearInterval(interval);
+  }, [adminUser]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -76,6 +100,21 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
 
             {/* User Info & Logout */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Notification Bell (Superadmin only) */}
+              {adminUser?.role === 'superadmin' && (
+                <button
+                  onClick={() => navigate('/admin/randevular?filter=pending')}
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition"
+                  title="Bekliyor durumundaki randevular"
+                >
+                  <Bell size={18} />
+                  {notificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
+                      {notificationCount > 9 ? '9+' : notificationCount}
+                    </span>
+                  )}
+                </button>
+              )}
               <div className="hidden sm:block text-right">
                 <p className="text-xs font-medium text-gray-900">{adminUser?.name}</p>
                 <p className="text-xs text-gray-500">{adminUser?.role === 'superadmin' ? 'Süper Admin' : 'Admin'}</p>

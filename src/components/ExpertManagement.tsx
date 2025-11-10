@@ -11,7 +11,7 @@ interface Expert {
 
 export function ExpertManagement() {
   const [experts, setExperts] = useState<Expert[]>([]);
-  const [newExpert, setNewExpert] = useState({ name: '', email: '' });
+  const [newExpert, setNewExpert] = useState({ name: '', email: '', role: 'admin' });
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [editingExpert, setEditingExpert] = useState<Expert | null>(null);
@@ -41,17 +41,33 @@ export function ExpertManagement() {
       const response = await fetch('/api/experts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newExpert)
+        body: JSON.stringify({
+          name: newExpert.name,
+          email: newExpert.email,
+          role: newExpert.role
+        })
       });
 
       if (!response.ok) throw new Error('Failed to add expert');
       const data = await response.json();
-      setExperts([...experts, { id: data.id.toString(), name: data.name, email: data.email }]);
-      setNewExpert({ name: '', email: '' });
+      setExperts([...experts, { id: data.id.toString(), name: data.name, email: data.email, role: data.role }]);
+      setNewExpert({ name: '', email: '', role: 'admin' });
     } catch (error) {
       console.error('Error adding expert:', error);
       alert('Uzman eklenirken hata oluştu');
     }
+  };
+
+  const getRoleBadge = (role?: string) => {
+    const displayRole = role || 'admin';
+    const bgColor = displayRole === 'superadmin' ? 'bg-purple-100' : 'bg-blue-100';
+    const textColor = displayRole === 'superadmin' ? 'text-purple-700' : 'text-blue-700';
+    const roleLabel = displayRole === 'superadmin' ? 'Süper Admin' : 'Admin';
+    return (
+      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${bgColor} ${textColor}`}>
+        {roleLabel}
+      </span>
+    );
   };
 
   const handleDeleteExpert = async (id: string) => {
@@ -92,13 +108,30 @@ export function ExpertManagement() {
       // Reload experts list
       await loadExperts();
 
-      setImportMessage({
-        type: 'success',
-        text: `${data.imported} uzman başarıyla importa edildi${data.skipped > 0 ? `, ${data.skipped} atlandı` : ''}`
-      });
+      // Show import results
+      const importedUsers = data.results.filter((r: any) => r.status === 'imported');
+      const usersHtml = importedUsers.map((user: any) =>
+        `<div style="text-align: left; margin: 10px 0; padding: 10px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+          <div style="font-weight: bold; color: #1f2937;">${user.name}</div>
+          <div style="font-size: 12px; color: #6b7280; margin: 5px 0;">${user.email}</div>
+        </div>`
+      ).join('');
 
-      // Clear message after 5 seconds
-      setTimeout(() => setImportMessage(null), 5000);
+      await Swal.fire({
+        title: 'İmport Başarılı',
+        html: `
+          <div style="text-align: left; margin-bottom: 15px;">
+            <p style="margin-bottom: 15px;"><strong>${data.imported}</strong> uzman başarıyla importa edildi${data.skipped > 0 ? `, <strong>${data.skipped}</strong> atlandı` : ''}</p>
+            <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; padding: 10px; margin-bottom: 15px; color: #1e40af; font-size: 12px;">
+              <strong>✓ Bilgi:</strong> Kullanıcılar ittoolbox.devkit.com.tr'deki şifreleri ile giriş yapabilirler.
+            </div>
+            ${usersHtml}
+          </div>
+        `,
+        icon: 'success',
+        confirmButtonText: 'Tamam',
+        confirmButtonColor: '#3b82f6'
+      });
     } catch (error) {
       console.error('Error importing experts:', error);
       setImportMessage({
@@ -111,19 +144,27 @@ export function ExpertManagement() {
   };
 
   const handleEditExpert = async (expert: Expert) => {
+    const currentRole = expert.role || 'admin';
+
     const { value: formValues } = await Swal.fire({
       title: 'Uzman Düzenle',
       html: `
         <input id="swal-name" class="swal2-input" placeholder="Ad" value="${expert.name}">
         <input id="swal-email" class="swal2-input" placeholder="Email" value="${expert.email}">
         <select id="swal-role" class="swal2-input" style="height: auto;">
-          <option value="admin" ${expert.role === 'admin' ? 'selected' : ''}>Admin</option>
-          <option value="superadmin" ${expert.role === 'superadmin' ? 'selected' : ''}>Superadmin</option>
+          <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
+          <option value="superadmin" ${currentRole === 'superadmin' ? 'selected' : ''}>Superadmin</option>
         </select>
       `,
       confirmButtonText: 'Kaydet',
       cancelButtonText: 'İptal',
       showCancelButton: true,
+      didOpen: () => {
+        const roleSelect = document.getElementById('swal-role') as HTMLSelectElement;
+        if (roleSelect) {
+          roleSelect.value = currentRole;
+        }
+      },
       preConfirm: () => {
         const name = (document.getElementById('swal-name') as HTMLInputElement)?.value;
         const email = (document.getElementById('swal-email') as HTMLInputElement)?.value;
@@ -238,7 +279,7 @@ export function ExpertManagement() {
       {/* Add Expert Form */}
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <h3 className="text-base sm:text-lg font-semibold mb-4">Yeni Uzman Ekle</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <input
             type="text"
             placeholder="Uzman Adı"
@@ -253,6 +294,14 @@ export function ExpertManagement() {
             onChange={(e) => setNewExpert({ ...newExpert, email: e.target.value })}
             className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
           />
+          <select
+            value={newExpert.role}
+            onChange={(e) => setNewExpert({ ...newExpert, role: e.target.value })}
+            className="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          >
+            <option value="admin">Admin</option>
+            <option value="superadmin">Superadmin</option>
+          </select>
           <button
             onClick={handleAddExpert}
             className="col-span-1 sm:col-span-2 lg:col-span-1 bg-blue-500 text-white rounded px-4 py-2 flex items-center justify-center gap-2 hover:bg-blue-600 transition text-sm font-medium"
@@ -270,13 +319,14 @@ export function ExpertManagement() {
               <tr>
                 <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Ad</th>
                 <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Email</th>
+                <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Rol</th>
                 <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">İşlem</th>
               </tr>
             </thead>
             <tbody>
               {experts.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 lg:px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 lg:px-6 py-4 text-center text-sm text-gray-500">
                     Henüz uzman tanımlanmamış
                   </td>
                 </tr>
@@ -285,6 +335,7 @@ export function ExpertManagement() {
                   <tr key={expert.id} className="border-t hover:bg-gray-50">
                     <td className="px-4 lg:px-6 py-3 text-sm">{expert.name}</td>
                     <td className="px-4 lg:px-6 py-3 text-sm font-mono text-gray-600">{expert.email}</td>
+                    <td className="px-4 lg:px-6 py-3 text-sm">{getRoleBadge(expert.role)}</td>
                     <td className="px-4 lg:px-6 py-3">
                       <div className="flex items-center gap-1">
                         <button
@@ -331,6 +382,9 @@ export function ExpertManagement() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-sm text-gray-900">{expert.name}</p>
                   <p className="text-xs text-gray-600 truncate font-mono">{expert.email}</p>
+                  <div className="mt-2">
+                    {getRoleBadge(expert.role)}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

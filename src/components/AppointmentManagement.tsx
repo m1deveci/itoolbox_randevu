@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 
 interface Appointment {
@@ -27,9 +28,18 @@ interface Props {
 }
 
 export function AppointmentManagement({ adminUser }: Props) {
+  const [searchParams] = useSearchParams();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
   const [loading, setLoading] = useState(false);
+
+  // Check URL params for initial filter
+  useEffect(() => {
+    const urlFilter = searchParams.get('filter');
+    if (urlFilter && ['all', 'pending', 'approved', 'cancelled', 'my'].includes(urlFilter)) {
+      setFilter(urlFilter as 'all' | 'pending' | 'approved' | 'cancelled' | 'my');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadAppointments();

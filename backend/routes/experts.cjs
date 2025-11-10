@@ -51,7 +51,7 @@ module.exports = (pool) => {
   // POST /api/experts - Create new expert
   router.post('/', async (req, res) => {
     try {
-      const { name, email } = req.body;
+      const { name, email, role } = req.body;
 
       // Validate input
       if (!name || !email) {
@@ -62,15 +62,19 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Invalid email format' });
       }
 
+      const validRoles = ['admin', 'superadmin'];
+      const finalRole = role && validRoles.includes(role) ? role : 'admin';
+
       const [result] = await pool.execute(
-        'INSERT INTO experts (name, email) VALUES (?, ?)',
-        [name, email]
+        'INSERT INTO experts (name, email, role) VALUES (?, ?, ?)',
+        [name, email, finalRole]
       );
 
       res.status(201).json({
         id: result.insertId,
         name,
         email,
+        role: finalRole,
         created_at: new Date().toISOString()
       });
     } catch (error) {
@@ -183,9 +187,9 @@ module.exports = (pool) => {
   // POST /api/experts/import - Import admin/superadmin users from ittoolbox database
   router.post('/import/from-ittoolbox', async (req, res) => {
     try {
-      // Get all admin and superadmin users from ittoolbox database
+      // Get all admin and superadmin users from ittoolbox database (including their passwords)
       const [ittoolboxUsers] = await ittoolboxPool.execute(
-        'SELECT id, name, email FROM users WHERE role IN (?, ?) AND email IS NOT NULL',
+        'SELECT id, name, email, role, password FROM users WHERE role IN (?, ?) AND email IS NOT NULL',
         ['admin', 'superadmin']
       );
 
@@ -199,9 +203,15 @@ module.exports = (pool) => {
 
       for (const user of ittoolboxUsers) {
         try {
+          // Use ittoolbox password hash directly (already bcrypt hashed)
+          const hashedPassword = user.password;
+
+          // Map ittoolbox roles to our system
+          const expertRole = user.role === 'superadmin' ? 'superadmin' : 'admin';
+
           const [result] = await pool.execute(
-            'INSERT INTO experts (name, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)',
-            [user.name, user.email]
+            'INSERT INTO experts (name, email, role, password_hash) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), password_hash = VALUES(password_hash)',
+            [user.name, user.email, expertRole, hashedPassword]
           );
 
           results.push({

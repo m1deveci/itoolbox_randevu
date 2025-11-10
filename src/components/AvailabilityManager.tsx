@@ -153,9 +153,14 @@ export function AvailabilityManager({ adminUser }: Props) {
       if (!response.ok) throw new Error('Failed to fetch experts');
       const data = await response.json();
       setExperts(data);
-      // Set first expert as default if none selected
+      // Set logged-in user as default, or first expert if not in list
       if (data.length > 0 && !selectedExpertId) {
-        setSelectedExpertId(data[0].id);
+        const currentUserInList = data.find(e => e.id === adminUser?.id);
+        if (currentUserInList) {
+          setSelectedExpertId(adminUser.id);
+        } else {
+          setSelectedExpertId(data[0].id);
+        }
       }
     } catch (error) {
       console.error('Error loading experts:', error);

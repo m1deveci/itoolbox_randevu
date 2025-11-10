@@ -452,7 +452,7 @@ export function AppointmentManagement({ adminUser }: Props) {
               <table className="w-full">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Müşteri</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Çalışan</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Telefon</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Ticket No</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Uzman</th>

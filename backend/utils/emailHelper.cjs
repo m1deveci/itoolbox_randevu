@@ -135,7 +135,7 @@ DTSTAMP:${dtstamp}Z
 DTSTART:${dtstart}
 DTEND:${dtend}
 SUMMARY:IT Uzman Randevusu - ${expert.name}
-DESCRIPTION:Ticket No: ${appointment.ticket_no}\\nIT Uzmanı: ${expert.name}\\nMüşteri: ${appointment.user_name}
+DESCRIPTION:Ticket No: ${appointment.ticket_no}\\nIT Uzmanı: ${expert.name}\\nÇalışan: ${appointment.user_name}
 LOCATION:
 STATUS:CONFIRMED
 SEQUENCE:0
@@ -184,7 +184,7 @@ Yeni bir randevu talebi aldınız:
 Randevu Detayları:
 - Tarih: ${formattedDate}
 - Saat: ${appointment.appointment_time.substring(0, 5)}
-- Müşteri: ${appointment.user_name}
+- Çalışan: ${appointment.user_name}
 - E-posta: ${appointment.user_email}
 - Telefon: ${appointment.user_phone}
 - Ticket No: ${appointment.ticket_no}
@@ -206,7 +206,7 @@ IT Randevu Sistemi
         <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
         <p><strong>Tarih:</strong> ${formattedDate}</p>
         <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
-        <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+        <p><strong>Çalışan:</strong> ${appointment.user_name}</p>
         <p><strong>E-posta:</strong> ${appointment.user_email}</p>
         <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
         <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
@@ -365,7 +365,7 @@ Randevu talebini onayladınız.
 Randevu Detayları:
 - Tarih: ${formattedDate}
 - Saat: ${appointment.appointment_time.substring(0, 5)}
-- Müşteri: ${appointment.user_name}
+- Çalışan: ${appointment.user_name}
 - E-posta: ${appointment.user_email}
 - Telefon: ${appointment.user_phone}
 - Ticket No: ${appointment.ticket_no}
@@ -386,7 +386,7 @@ IT Randevu Sistemi
         <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
         <p><strong>Tarih:</strong> ${formattedDate}</p>
         <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
-        <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+        <p><strong>Çalışan:</strong> ${appointment.user_name}</p>
         <p><strong>E-posta:</strong> ${appointment.user_email}</p>
         <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
         <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
@@ -547,7 +547,7 @@ Randevu talebinizin ataması başka bir IT Uzmanına devredilmiştir.
 Randevu Detayları:
 - Tarih: ${formattedDate}
 - Saat: ${appointment.appointment_time.substring(0, 5)}
-- Müşteri: ${appointment.user_name}
+- Çalışan: ${appointment.user_name}
 - Ticket No: ${appointment.ticket_no}
 - Yeni Atanan Uzman: ${newExpert.name}
 
@@ -567,7 +567,7 @@ IT Randevu Sistemi
           <h3 style="margin-top: 0; color: #1f2937;">Randevu Taşıma Detayları</h3>
           <p><strong>Tarih:</strong> ${formattedDate}</p>
           <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
-          <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+          <p><strong>Çalışan:</strong> ${appointment.user_name}</p>
           <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
           <p style="margin-bottom: 0;"><strong>Yeni Atanan Uzman:</strong> <span style="color: #10b981; font-weight: bold;">${newExpert.name}</span></p>
         </div>
@@ -635,7 +635,7 @@ Size yeni bir randevu ataması yapılmıştır:
 Randevu Detayları:
 - Tarih: ${formattedDate}
 - Saat: ${appointment.appointment_time.substring(0, 5)}
-- Müşteri: ${appointment.user_name}
+- Çalışan: ${appointment.user_name}
 - E-posta: ${appointment.user_email}
 - Telefon: ${appointment.user_phone}
 - Ticket No: ${appointment.ticket_no}
@@ -657,7 +657,7 @@ IT Randevu Sistemi
           <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
           <p><strong>Tarih:</strong> ${formattedDate}</p>
           <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
-          <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+          <p><strong>Çalışan:</strong> ${appointment.user_name}</p>
           <p><strong>E-posta:</strong> ${appointment.user_email}</p>
           <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
           <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Edit } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 
@@ -16,6 +16,12 @@ interface Appointment {
   status: 'pending' | 'approved' | 'cancelled';
 }
 
+interface Expert {
+  id: number;
+  name: string;
+  email: string;
+}
+
 interface AdminUser {
   id: number; // Same ID as expert_id in randevu database
   name: string;
@@ -30,8 +36,14 @@ interface Props {
 export function AppointmentManagement({ adminUser }: Props) {
   const [searchParams] = useSearchParams();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
   const [loading, setLoading] = useState(false);
+
+  // Load experts on mount
+  useEffect(() => {
+    loadExperts();
+  }, []);
 
   // Check URL params for initial filter
   useEffect(() => {
@@ -45,6 +57,17 @@ export function AppointmentManagement({ adminUser }: Props) {
     loadAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, adminUser]);
+
+  const loadExperts = async () => {
+    try {
+      const response = await fetch('/api/experts');
+      if (!response.ok) throw new Error('Failed to fetch experts');
+      const data = await response.json();
+      setExperts(data.experts || []);
+    } catch (error) {
+      console.error('Error loading experts:', error);
+    }
+  };
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -220,6 +243,143 @@ export function AppointmentManagement({ adminUser }: Props) {
     }
   };
 
+  const checkExpertAvailability = async (
+    expertId: number,
+    appointmentDate: string,
+    appointmentTime: string
+  ): Promise<boolean> => {
+    try {
+      const response = await fetch(
+        `/api/availability?expertId=${expertId}&date=${appointmentDate}&time=${appointmentTime}`
+      );
+      if (!response.ok) return false;
+      const data = await response.json();
+      return data.isAvailable === true;
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      return false;
+    }
+  };
+
+  const handleReassign = async (appointmentId: string) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+
+    // Check availability for each expert
+    const availabilityStatus: { [key: number]: boolean } = {};
+    for (const expert of experts) {
+      if (expert.id !== appointment.expertId) {
+        const isAvailable = await checkExpertAvailability(
+          expert.id,
+          appointment.date,
+          appointment.time
+        );
+        availabilityStatus[expert.id] = isAvailable;
+      }
+    }
+
+    // Create HTML with expert options
+    const htmlContent = experts
+      .filter(e => e.id !== appointment.expertId) // Exclude current expert
+      .map(
+        expert =>
+          `<div style="margin: 8px 0; padding: 8px; border: 1px solid #e5e7eb; border-radius: 4px; text-align: left;">
+          <label style="display: flex; align-items: center; cursor: ${
+            availabilityStatus[expert.id] ? 'pointer' : 'not-allowed'
+          };">
+            <input type="radio" name="newExpert" value="${expert.id}" ${
+            !availabilityStatus[expert.id] ? 'disabled' : ''
+          } style="margin-right: 8px;" />
+            <span style="flex: 1;">
+              <strong>${expert.name}</strong>
+              ${availabilityStatus[expert.id] ? '✅ Müsait' : '❌ Müsait Değil'}
+            </span>
+          </label>
+        </div>`
+      )
+      .join('');
+
+    const { value: selectedExpertId } = await Swal.fire({
+      title: 'Atama Değiştir',
+      html: `
+        <div style="text-align: left; margin: 16px 0;">
+          <p><strong>Şu anki uzman:</strong> ${appointment.expertName}</p>
+          <p style="margin-bottom: 16px;"><strong>Tarih/Saat:</strong> ${appointment.date} ${appointment.time}</p>
+          <p style="margin-bottom: 8px;"><strong>Yeni uzman seçin:</strong></p>
+          ${htmlContent}
+        </div>
+      `,
+      input: 'radio',
+      inputOptions: experts
+        .filter(e => e.id !== appointment.expertId)
+        .reduce(
+          (acc, expert) => {
+            const status = availabilityStatus[expert.id]
+              ? '✅ Müsait'
+              : '❌ Müsait Değil';
+            acc[expert.id.toString()] = `${expert.name} ${status}`;
+            return acc;
+          },
+          {} as { [key: string]: string }
+        ),
+      showCancelButton: true,
+      confirmButtonText: 'Atamayı Değiştir',
+      cancelButtonText: 'Vazgeç',
+      confirmButtonColor: '#3b82f6',
+      inputValidator: (value) => {
+        if (!value) {
+          return 'Lütfen yeni bir uzman seçiniz!';
+        }
+        const selectedId = parseInt(value);
+        if (!availabilityStatus[selectedId]) {
+          return 'Seçilen uzman bu tarih/saatte müsait değildir!';
+        }
+      }
+    });
+
+    if (!selectedExpertId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/reassign-expert`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
+        },
+        body: JSON.stringify({ newExpertId: parseInt(selectedExpertId) })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reassign appointment');
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Atama Başarılı',
+        text: 'Randevunun ataması başarıyla değiştirildi. İlgili taraflara bildirim gönderildi.',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      // Reload appointments
+      loadAppointments();
+    } catch (error) {
+      console.error('Error reassigning appointment:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Atama değiştirilirken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
   const filteredAppointments = (() => {
     if (filter === 'all') {
       return appointments;
@@ -318,14 +478,24 @@ export function AppointmentManagement({ adminUser }: Props) {
                             <button
                               onClick={() => handleApprove(apt.id)}
                               className="text-xs sm:text-sm text-green-600 hover:text-green-800 font-semibold hover:bg-green-50 px-2 py-1 rounded"
+                              title="Onayla"
                             >
                               ✓
                             </button>
                             <button
                               onClick={() => handleCancel(apt.id)}
                               className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-semibold hover:bg-red-50 px-2 py-1 rounded"
+                              title="Red"
                             >
                               ✕
+                            </button>
+                            <button
+                              onClick={() => handleReassign(apt.id)}
+                              className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded inline-flex items-center gap-1"
+                              title="Atama Değiştir"
+                            >
+                              <Edit className="w-3 h-3" />
+                              <span className="hidden sm:inline">Atama</span>
                             </button>
                           </>
                         )}
@@ -387,6 +557,13 @@ export function AppointmentManagement({ adminUser }: Props) {
                       className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold py-2 rounded transition"
                     >
                       Red
+                    </button>
+                    <button
+                      onClick={() => handleReassign(apt.id)}
+                      className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition inline-flex items-center justify-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Atama
                     </button>
                   </div>
                 )}

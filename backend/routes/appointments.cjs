@@ -4,7 +4,10 @@ const {
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
   sendAppointmentApprovalToExpert,
-  sendAppointmentCancellationToUser
+  sendAppointmentCancellationToUser,
+  sendReassignmentNotificationToOldExpert,
+  sendReassignmentNotificationToNewExpert,
+  sendReassignmentNotificationToUser
 } = require('../utils/emailHelper.cjs');
 
 module.exports = (pool) => {
@@ -473,6 +476,156 @@ module.exports = (pool) => {
     } catch (error) {
       console.error('Error approving appointment:', error);
       res.status(500).json({ error: 'Failed to approve appointment' });
+    }
+  });
+
+  // PUT /api/appointments/:id/reassign-expert - Reassign appointment to a different expert
+  router.put('/:id/reassign-expert', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      const { newExpertId } = req.body;
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || 'System';
+
+      if (!newExpertId) {
+        return res.status(400).json({ error: 'New expert ID is required' });
+      }
+
+      // Get appointment details
+      const [appointments] = await pool.execute(
+        `SELECT a.*, e.name as old_expert_name, e.email as old_expert_email
+         FROM appointments a
+         JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      const appointment = appointments[0];
+
+      // Check if appointment is pending
+      if (appointment.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending appointments can be reassigned' });
+      }
+
+      // Check if old and new expert are different
+      if (appointment.expert_id === parseInt(newExpertId)) {
+        return res.status(400).json({ error: 'New expert must be different from current expert' });
+      }
+
+      // Check if new expert exists
+      const [newExperts] = await pool.execute(
+        'SELECT id, name, email FROM experts WHERE id = ?',
+        [newExpertId]
+      );
+
+      if (newExperts.length === 0) {
+        return res.status(404).json({ error: 'New expert not found' });
+      }
+
+      const newExpert = newExperts[0];
+
+      // Check if new expert has availability for this date and time
+      const [availabilities] = await pool.execute(
+        `SELECT start_time FROM availability
+         WHERE expert_id = ? AND availability_date = ?`,
+        [newExpertId, appointment.appointment_date]
+      );
+
+      if (availabilities.length === 0) {
+        return res.status(400).json({ error: 'New expert has no availability for this date' });
+      }
+
+      // Check if requested time matches exactly with any availability startTime
+      const requestedTimeStr = appointment.appointment_time.substring(0, 5);
+      const isTimeAvailable = availabilities.some((avail) => {
+        const availStartTime = avail.start_time.substring(0, 5);
+        return availStartTime === requestedTimeStr;
+      });
+
+      if (!isTimeAvailable) {
+        return res.status(400).json({ error: 'New expert is not available at this time' });
+      }
+
+      // Check if time slot is already booked for new expert
+      const [conflicts] = await pool.execute(
+        `SELECT id FROM appointments
+         WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
+         AND status != 'cancelled'`,
+        [newExpertId, appointment.appointment_date, appointment.appointment_time]
+      );
+
+      if (conflicts.length > 0) {
+        return res.status(409).json({ error: 'Time slot is already booked for new expert' });
+      }
+
+      // Update appointment with new expert
+      const [result] = await pool.execute(
+        'UPDATE appointments SET expert_id = ? WHERE id = ?',
+        [newExpertId, appointmentId]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Failed to update appointment' });
+      }
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'reassign_appointment',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              ticket_no: appointment.ticket_no,
+              appointment_date: appointment.appointment_date,
+              appointment_time: appointment.appointment_time,
+              old_expert_id: appointment.expert_id,
+              old_expert_name: appointment.old_expert_name,
+              new_expert_id: newExpertId,
+              new_expert_name: newExpert.name,
+              user_name: appointment.user_name,
+              user_email: appointment.user_email
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging activity:', logError);
+      }
+
+      // Send email notifications (async, don't wait for them)
+      const oldExpertData = { name: appointment.old_expert_name, email: appointment.old_expert_email || '' };
+
+      sendReassignmentNotificationToOldExpert(pool, appointment, oldExpertData, newExpert).catch(error => {
+        console.error('Error sending reassignment email to old expert:', error);
+      });
+
+      sendReassignmentNotificationToNewExpert(pool, appointment, newExpert, oldExpertData).catch(error => {
+        console.error('Error sending reassignment email to new expert:', error);
+      });
+
+      sendReassignmentNotificationToUser(pool, appointment, oldExpertData, newExpert).catch(error => {
+        console.error('Error sending reassignment email to user:', error);
+      });
+
+      res.json({
+        message: 'Appointment reassigned successfully',
+        newExpertId,
+        newExpertName: newExpert.name
+      });
+    } catch (error) {
+      console.error('Error reassigning appointment:', error);
+      res.status(500).json({ error: 'Failed to reassign appointment' });
     }
   });
 

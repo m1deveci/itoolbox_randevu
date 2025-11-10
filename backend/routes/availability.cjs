@@ -73,13 +73,16 @@ module.exports = (pool) => {
       }
 
       // Check for exact duplicate (same startTime for same date)
+      console.log('Checking duplicate - expertId:', expertId, 'availabilityDate:', availabilityDate, 'startTime:', startTime, 'type:', typeof availabilityDate);
       const [duplicate] = await pool.execute(
-        `SELECT id FROM availability
+        `SELECT id, availability_date FROM availability
          WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
         [expertId, availabilityDate, startTime]
       );
+      console.log('Duplicate check result:', duplicate);
 
       if (duplicate.length > 0) {
+        console.log('Duplicate found:', duplicate);
         return res.status(409).json({
           error: 'Bu saat zaten müsaitlik olarak tanımlı'
         });
@@ -139,10 +142,12 @@ module.exports = (pool) => {
         }
       }
 
+      console.log('Inserting availability - expertId:', finalExpertId, 'availabilityDate:', availabilityDate, 'startTime:', startTime, 'endTime:', endTime);
       const [result] = await pool.execute(
         'INSERT INTO availability (expert_id, availability_date, start_time, end_time) VALUES (?, ?, ?, ?)',
         [finalExpertId, availabilityDate, startTime, endTime]
       );
+      console.log('Insert result:', result);
 
       // Log activity
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;

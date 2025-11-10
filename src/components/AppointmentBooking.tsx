@@ -218,10 +218,34 @@ export function AppointmentBooking() {
       if (!availResponse.ok) throw new Error('Failed to fetch availability');
       const availData = await availResponse.json();
 
-      // Parse ISO dates to YYYY-MM-DD format
+      // Parse dates to YYYY-MM-DD format (avoid timezone issues)
       const parsedAvailabilities = availData.map((a: any) => {
-        const dateObj = new Date(a.availability_date);
-        const dateString = dateObj.toISOString().split('T')[0];
+        let dateString = a.availability_date;
+        if (typeof dateString === 'string') {
+          // Eğer datetime formatındaysa (YYYY-MM-DD HH:MM:SS), sadece tarih kısmını al
+          if (dateString.includes(' ')) {
+            dateString = dateString.split(' ')[0];
+          } else if (dateString.includes('T')) {
+            dateString = dateString.split('T')[0];
+          }
+          // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            // Sadece geçerli format değilse Date objesi ile parse et
+            const dateObj = new Date(a.availability_date + 'T00:00:00');
+            // Yerel saat diliminde tarih bileşenlerini al
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateString = `${year}-${month}-${day}`;
+          }
+        } else {
+          // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+          const dateObj = new Date(a.availability_date);
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          dateString = `${year}-${month}-${day}`;
+        }
 
         return {
           ...a,

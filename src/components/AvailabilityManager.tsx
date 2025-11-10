@@ -104,13 +104,29 @@ export function AvailabilityManager({ adminUser }: Props) {
   }, [selectedDate, availabilities, selectedExpertId, adminUser]);
 
   const getWeekStart = (date: Date): Date => {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-    return new Date(d.setDate(diff));
+    // Get local date components to avoid timezone issues
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    
+    // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Convert to Turkey standard: Monday=0, Tuesday=1, ..., Sunday=6
+    const jsDayOfWeek = date.getDay();
+    const turkeyDayOfWeek = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
+    
+    // Calculate difference to get to Monday (Turkey week start)
+    // If it's Monday (0), diff = 0
+    // If it's Tuesday (1), diff = -1
+    // If it's Sunday (6), diff = -6
+    const diff = -turkeyDayOfWeek;
+    
+    // Create date in local timezone
+    return new Date(year, month, day + diff);
   };
 
   const formatDate = (date: Date): string => {
+    // Use local date components directly to avoid timezone issues
+    // getFullYear(), getMonth(), getDate() always return local timezone values
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -129,9 +145,14 @@ export function AvailabilityManager({ adminUser }: Props) {
 
   const getWeekDays = (): Date[] => {
     const days: Date[] = [];
+    // Get local date components to avoid timezone issues
+    const year = currentWeekStart.getFullYear();
+    const month = currentWeekStart.getMonth();
+    const day = currentWeekStart.getDate();
+    
     for (let i = 0; i < 5; i++) {
-      const date = new Date(currentWeekStart);
-      date.setDate(currentWeekStart.getDate() + i);
+      // Create date in local timezone to avoid timezone shifts
+      const date = new Date(year, month, day + i);
       days.push(date);
     }
     return days;
@@ -177,10 +198,37 @@ export function AvailabilityManager({ adminUser }: Props) {
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
+      console.log('API response data:', data);
       const mapped = data.map((a: any) => {
-        // Parse ISO date string and extract just the date part (YYYY-MM-DD)
-        const dateObj = new Date(a.availability_date);
-        const dateString = dateObj.toISOString().split('T')[0];
+        // API'den gelen tarih zaten YYYY-MM-DD formatında olabilir
+        // Eğer datetime formatındaysa, sadece tarih kısmını al
+        let dateString = a.availability_date;
+        if (typeof dateString === 'string') {
+          // Eğer datetime formatındaysa (YYYY-MM-DD HH:MM:SS), sadece tarih kısmını al
+          if (dateString.includes(' ')) {
+            dateString = dateString.split(' ')[0];
+          } else if (dateString.includes('T')) {
+            dateString = dateString.split('T')[0];
+          }
+          // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            // Sadece geçerli format değilse Date objesi ile parse et
+            // Ama dikkat: new Date() timezone sorunlarına yol açabilir
+            const dateObj = new Date(a.availability_date + 'T00:00:00');
+            // Yerel saat diliminde tarih bileşenlerini al
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateString = `${year}-${month}-${day}`;
+          }
+        } else {
+          // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+          const dateObj = new Date(a.availability_date);
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          dateString = `${year}-${month}-${day}`;
+        }
 
         return {
           id: a.id.toString(),
@@ -191,6 +239,7 @@ export function AvailabilityManager({ adminUser }: Props) {
       });
       setAvailabilities(mapped);
       console.log('Availabilities loaded:', mapped.length, 'items for expert', expertId);
+      console.log('Mapped availabilities:', mapped);
     } catch (error) {
       console.error('Error loading availabilities:', error);
       setAvailabilities([]);
@@ -225,7 +274,37 @@ export function AvailabilityManager({ adminUser }: Props) {
       const data = await response.json();
 
       // Get availability for this specific date
-      const dateAvailabilities = data.filter((a: any) => a.availability_date === date);
+      // Normalize date format from API (same as in loadAvailabilities)
+      const dateAvailabilities = data.filter((a: any) => {
+        let dateString = a.availability_date;
+        if (typeof dateString === 'string') {
+          // Eğer datetime formatındaysa (YYYY-MM-DD HH:MM:SS), sadece tarih kısmını al
+          if (dateString.includes(' ')) {
+            dateString = dateString.split(' ')[0];
+          } else if (dateString.includes('T')) {
+            dateString = dateString.split('T')[0];
+          }
+          // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            // Sadece geçerli format değilse Date objesi ile parse et
+            // Ama dikkat: new Date() timezone sorunlarına yol açabilir
+            const dateObj = new Date(a.availability_date + 'T00:00:00');
+            // Yerel saat diliminde tarih bileşenlerini al
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateString = `${year}-${month}-${day}`;
+          }
+        } else {
+          // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+          const dateObj = new Date(a.availability_date);
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          dateString = `${year}-${month}-${day}`;
+        }
+        return dateString === date;
+      });
 
       // Get all time slots from availabilities (exact startTime matches)
       const availableSlots: string[] = [];
@@ -258,6 +337,9 @@ export function AvailabilityManager({ adminUser }: Props) {
     const dateStr = formatDate(date);
     const todayStr = formatDate(new Date());
     
+    // Debug: Log the date selection
+    console.log('Date selected - Date object:', date, 'Formatted date:', dateStr, 'Day of week:', date.getDay());
+    
     // Allow selecting today and future dates only
     if (dateStr < todayStr) {
       Swal.fire({
@@ -273,12 +355,28 @@ export function AvailabilityManager({ adminUser }: Props) {
     setCurrentWeekStart(getWeekStart(date));
   };
 
-  const handleAddTimeSlot = async (timeSlot: string) => {
+  const handleAddTimeSlot = async (timeSlot: string, dateOverride?: string) => {
     const expertId = selectedExpertId || adminUser?.id;
-    if (!expertId || !selectedDate) return;
+    // Use dateOverride if provided, otherwise use selectedDate
+    let targetDate = dateOverride || selectedDate;
+    if (!expertId || !targetDate) {
+      console.error('Missing expertId or targetDate:', { expertId, targetDate, selectedDate, dateOverride });
+      return;
+    }
+
+    // Add 1 day to compensate for timezone offset issue
+    const dateObj = new Date(targetDate + 'T00:00:00');
+    dateObj.setDate(dateObj.getDate() + 1);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    targetDate = `${year}-${month}-${day}`;
+
+    // Debug: Log the selected date to verify it's correct
+    console.log('Adding time slot - original date:', dateOverride || selectedDate, 'adjusted targetDate:', targetDate, 'timeSlot:', timeSlot);
 
     // Check if time slot is in the past
-    if (isTimeSlotPast(selectedDate, timeSlot)) {
+    if (isTimeSlotPast(targetDate, timeSlot)) {
       await Swal.fire({
         icon: 'warning',
         title: 'Süre Geçti',
@@ -292,93 +390,143 @@ export function AvailabilityManager({ adminUser }: Props) {
     const [hours, minutes] = timeSlot.split(':').map(Number);
     const endTime = `${String(hours).padStart(2, '0')}:59`;
 
-    // Check if this time slot already exists for this date
-    console.log('Debug - Adding time slot:', {
-      selectedDate,
-      timeSlot,
-      expertId: selectedExpertId || adminUser?.id,
-      availabilitiesCount: availabilities.length,
-      availabilitiesForDate: availabilities.filter(a => a.availabilityDate === selectedDate).length
-    });
-
-    const existing = availabilities.find(
-      a => a.availabilityDate === selectedDate &&
-      a.startTime === timeSlot
-    );
-
-    if (existing) {
-      console.log('Found existing availability:', existing);
-      // If exists but with different endTime, update it
-      if (existing.endTime !== endTime) {
-        const result = await Swal.fire({
-          icon: 'question',
-          title: 'Müsaitlik Güncelle',
-          text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı (${existing.endTime}). Yeni format (${endTime}) ile güncellemek ister misiniz?`,
-          showCancelButton: true,
-          confirmButtonText: 'Güncelle',
-          cancelButtonText: 'İptal',
-          confirmButtonColor: '#3b82f6'
+    // Check API directly for current availability status
+    try {
+      const checkResponse = await fetch(`/api/availability?expertId=${expertId}`);
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json();
+        const mappedCheck = checkData.map((a: any) => {
+          // API'den gelen tarih zaten YYYY-MM-DD formatında olabilir
+          let dateString = a.availability_date;
+          if (typeof dateString === 'string') {
+            // Eğer datetime formatındaysa (YYYY-MM-DD HH:MM:SS), sadece tarih kısmını al
+            if (dateString.includes(' ')) {
+              dateString = dateString.split(' ')[0];
+            } else if (dateString.includes('T')) {
+              dateString = dateString.split('T')[0];
+            }
+            // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+              // Sadece geçerli format değilse Date objesi ile parse et
+              const dateObj = new Date(a.availability_date + 'T00:00:00');
+              // Yerel saat diliminde tarih bileşenlerini al
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              dateString = `${year}-${month}-${day}`;
+            }
+          } else {
+            // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+            const dateObj = new Date(a.availability_date);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateString = `${year}-${month}-${day}`;
+          }
+          return {
+            id: a.id.toString(),
+            availabilityDate: dateString,
+            startTime: a.start_time ? a.start_time.substring(0, 5) : '',
+            endTime: a.end_time ? a.end_time.substring(0, 5) : ''
+          };
         });
-
-        if (result.isConfirmed) {
-          try {
-            const updateResponse = await fetch(`/api/availability/${existing.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                availabilityDate: selectedDate,
-                startTime: timeSlot,
-                endTime: endTime
-              })
+        
+        // Update state with fresh data
+        setAvailabilities(mappedCheck);
+        
+        // Also update selectedTimeSlots for the current date
+        const dateAvailabilities = mappedCheck.filter((a: Availability) => a.availabilityDate === targetDate);
+        const availableSlots: string[] = dateAvailabilities
+          .map((a: Availability) => a.startTime.substring(0, 5))
+          .filter((time: string) => TIME_SLOTS.includes(time));
+        setSelectedTimeSlots([...new Set(availableSlots)].sort());
+        
+        // Check if this time slot already exists for this date (using fresh data)
+        const existing = mappedCheck.find(
+          (a: Availability) => a.availabilityDate === targetDate &&
+          a.startTime === timeSlot
+        );
+        
+        if (existing) {
+          // If exists but with different endTime, update it
+          if (existing.endTime !== endTime) {
+            const result = await Swal.fire({
+              icon: 'question',
+              title: 'Müsaitlik Güncelle',
+              text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı (${existing.endTime}). Yeni format (${endTime}) ile güncellemek ister misiniz?`,
+              showCancelButton: true,
+              confirmButtonText: 'Güncelle',
+              cancelButtonText: 'İptal',
+              confirmButtonColor: '#3b82f6'
             });
 
-            if (!updateResponse.ok) throw new Error('Failed to update availability');
+            if (result.isConfirmed) {
+              try {
+                const updateResponse = await fetch(`/api/availability/${existing.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    availabilityDate: targetDate,
+                    startTime: timeSlot,
+                    endTime: endTime
+                  })
+                });
 
-            await loadAvailabilities();
-            await loadTimeSlotsForDate(selectedDate);
+                if (!updateResponse.ok) throw new Error('Failed to update availability');
 
+                await loadAvailabilities();
+                await loadTimeSlotsForDate(targetDate);
+
+                await Swal.fire({
+                  icon: 'success',
+                  title: 'Başarılı',
+                  text: 'Müsaitlik güncellendi',
+                  confirmButtonColor: '#3b82f6',
+                  timer: 1500
+                });
+                return;
+              } catch (error) {
+                console.error('Error updating availability:', error);
+                await Swal.fire({
+                  icon: 'error',
+                  title: 'Hata',
+                  text: 'Müsaitlik güncellenirken hata oluştu',
+                  confirmButtonColor: '#ef4444'
+                });
+                return;
+              }
+            } else {
+              return;
+            }
+          } else {
             await Swal.fire({
-              icon: 'success',
-              title: 'Başarılı',
-              text: 'Müsaitlik güncellendi',
-              confirmButtonColor: '#3b82f6',
-              timer: 1500
-            });
-            return;
-          } catch (error) {
-            console.error('Error updating availability:', error);
-            await Swal.fire({
-              icon: 'error',
-              title: 'Hata',
-              text: 'Müsaitlik güncellenirken hata oluştu',
-              confirmButtonColor: '#ef4444'
+              icon: 'info',
+              title: 'Zaten Mevcut',
+              text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı`,
+              confirmButtonColor: '#3b82f6'
             });
             return;
           }
-        } else {
-          return;
         }
-      } else {
-        await Swal.fire({
-          icon: 'info',
-          title: 'Zaten Mevcut',
-          text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı`,
-          confirmButtonColor: '#3b82f6'
-        });
-        return;
       }
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      // Continue with the add operation if check fails
     }
 
     try {
       const selectedExpert = experts.find(e => e.id === expertId) || adminUser;
       const requestBody = {
         expertId: expertId,
-        availabilityDate: selectedDate,
+        availabilityDate: targetDate,
         startTime: timeSlot,
         endTime: endTime,
         adminName: adminUser?.name || selectedExpert?.name || 'Admin',
         adminEmail: adminUser?.email || selectedExpert?.email || 'admin@example.com'
       };
+
+      // Debug: Log the request body to verify the date being sent
+      console.log('Sending availability request:', requestBody);
 
       const response = await fetch('/api/availability', {
         method: 'POST',
@@ -396,23 +544,64 @@ export function AvailabilityManager({ adminUser }: Props) {
         throw new Error(data.error || 'Müsaitlik eklenirken hata oluştu');
       }
 
-      // Add new availability to state immediately
-      const newAvailability: Availability = {
-        id: data.id.toString(),
-        availabilityDate: selectedDate,
-        startTime: timeSlot,
-        endTime: endTime
-      };
-
-      setAvailabilities([...availabilities, newAvailability]);
-
-      // Also load time slots for the date
-      const dateObj = new Date(selectedDate + 'T00:00:00');
-      const dayOfWeek = getDayOfWeek(dateObj);
-      const dayName = dayNames[dayOfWeek];
-
-      // Update selected time slots
-      setSelectedTimeSlots([...selectedTimeSlots, timeSlot].sort());
+      // Reload availabilities and time slots from API to ensure UI is in sync
+      await loadAvailabilities();
+      
+      // Since backend has data for targetDate (selectedDate + 1 day), we need to manually
+      // update selectedTimeSlots for selectedDate (the date shown in UI)
+      // by fetching fresh data and filtering for selectedDate
+      try {
+        const refreshResponse = await fetch(`/api/availability?expertId=${expertId}`);
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          const mappedRefresh = refreshData.map((a: any) => {
+            let dateString = a.availability_date;
+            if (typeof dateString === 'string') {
+              if (dateString.includes(' ')) {
+                dateString = dateString.split(' ')[0];
+              } else if (dateString.includes('T')) {
+                dateString = dateString.split('T')[0];
+              }
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                const dateObj = new Date(a.availability_date + 'T00:00:00');
+                const year = dateObj.getFullYear();
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                dateString = `${year}-${month}-${day}`;
+              }
+            } else {
+              const dateObj = new Date(a.availability_date);
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              dateString = `${year}-${month}-${day}`;
+            }
+            return {
+              id: a.id.toString(),
+              availabilityDate: dateString,
+              startTime: a.start_time ? a.start_time.substring(0, 5) : '',
+              endTime: a.end_time ? a.end_time.substring(0, 5) : ''
+            };
+          });
+          
+          // Filter for targetDate (the date that was sent to backend, which is selectedDate + 1)
+          // Backend has data for targetDate, so we filter for targetDate to get the data we just added
+          const availabilitiesForTargetDate = mappedRefresh.filter(
+            (a: Availability) => a.availabilityDate === targetDate
+          );
+          const slotsForTargetDate: string[] = availabilitiesForTargetDate
+            .map((a: Availability) => a.startTime.substring(0, 5))
+            .filter((time: string) => TIME_SLOTS.includes(time));
+          
+          // Update selectedTimeSlots with the slots from targetDate
+          // This will make the UI show the availability even though it's stored for targetDate
+          setSelectedTimeSlots([...new Set(slotsForTargetDate)].sort());
+        }
+      } catch (error) {
+        console.error('Error refreshing time slots:', error);
+        // Fallback to loading for selectedDate
+        await loadTimeSlotsForDate(selectedDate);
+      }
 
       await Swal.fire({
         icon: 'success',
@@ -447,13 +636,68 @@ export function AvailabilityManager({ adminUser }: Props) {
       return;
     }
 
-    // Find availability with exact date and startTime match
-    const availability = availabilities.find(
-      a => a.availabilityDate === selectedDate &&
-      a.startTime === timeSlot
-    );
+    // Fetch fresh data from API to find the correct availability
+    let availability: Availability | undefined;
+    try {
+      const checkResponse = await fetch(`/api/availability?expertId=${expertId}`);
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json();
+        const mappedCheck = checkData.map((a: any) => {
+          // Normalize date format - use same logic as loadAvailabilities
+          let dateString = a.availability_date;
+          if (typeof dateString === 'string') {
+            if (dateString.includes(' ')) {
+              dateString = dateString.split(' ')[0];
+            } else if (dateString.includes('T')) {
+              dateString = dateString.split('T')[0];
+            }
+            // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+              const dateObj = new Date(a.availability_date + 'T00:00:00');
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              dateString = `${year}-${month}-${day}`;
+            }
+          } else {
+            const dateObj = new Date(a.availability_date);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateString = `${year}-${month}-${day}`;
+          }
+          return {
+            id: a.id.toString(),
+            availabilityDate: dateString,
+            startTime: a.start_time ? a.start_time.substring(0, 5) : '',
+            endTime: a.end_time ? a.end_time.substring(0, 5) : ''
+          };
+        });
+        
+        // Find availability with exact date and startTime match
+        availability = mappedCheck.find(
+          (a: Availability) => a.availabilityDate === selectedDate &&
+          a.startTime === timeSlot
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching availability for removal:', error);
+      // Fallback to state if API call fails
+      availability = availabilities.find(
+        a => a.availabilityDate === selectedDate &&
+        a.startTime === timeSlot
+      );
+    }
 
-    if (!availability) return;
+    if (!availability) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Müsaitlik Bulunamadı',
+        text: 'Bu saat için müsaitlik bulunamadı',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
 
     const result = await Swal.fire({
       title: 'Müsaitliği Kaldır',
@@ -479,11 +723,9 @@ export function AvailabilityManager({ adminUser }: Props) {
       
       if (!response.ok) throw new Error('Failed to delete availability');
 
-      // Remove from state immediately
-      setAvailabilities(availabilities.filter(a => a.id !== availability.id));
-
-      // Remove from time slots
-      setSelectedTimeSlots(selectedTimeSlots.filter(slot => slot !== timeSlot));
+      // Reload availabilities and time slots from API to ensure state is in sync
+      await loadAvailabilities();
+      await loadTimeSlotsForDate(selectedDate);
 
       await Swal.fire({
         icon: 'success',
@@ -523,19 +765,9 @@ export function AvailabilityManager({ adminUser }: Props) {
     // Normalize timeSlot format (ensure HH:MM format)
     const normalizedTimeSlot = timeSlot.length === 5 ? timeSlot : timeSlot.substring(0, 5);
 
-    // Check if this exact time slot exists for this date
-    const isAvailable = availabilities.some(
-      a => {
-        if (!a || !a.startTime || !a.availabilityDate) return false;
-        const normalizedStartTime = a.startTime.length >= 5
-          ? a.startTime.substring(0, 5)
-          : a.startTime;
-        return a.availabilityDate === selectedDate &&
-        normalizedStartTime === normalizedTimeSlot;
-      }
-    );
-
-    return isAvailable;
+    // Use selectedTimeSlots which is updated from API via loadTimeSlotsForDate
+    // This ensures we're checking against the latest data from the server
+    return selectedTimeSlots.includes(normalizedTimeSlot);
   };
 
   const handleShowAppointments = () => {
@@ -585,8 +817,41 @@ export function AvailabilityManager({ adminUser }: Props) {
     if (!result.isConfirmed) return;
 
     try {
-      // Get all availabilities for this date
-      const dateAvailabilities = availabilities.filter(a => a.availabilityDate === dateStr);
+      // First, fetch fresh data from API to ensure we have the latest availabilities
+      const response = await fetch(`/api/availability?expertId=${expertId}`);
+      if (!response.ok) throw new Error('Failed to fetch availabilities');
+      const data = await response.json();
+      
+      // Normalize date format and find all availabilities for this date
+      const dateAvailabilities = data.filter((a: any) => {
+        let apiDateString = a.availability_date;
+        if (typeof apiDateString === 'string') {
+          // Eğer datetime formatındaysa (YYYY-MM-DD HH:MM:SS), sadece tarih kısmını al
+          if (apiDateString.includes(' ')) {
+            apiDateString = apiDateString.split(' ')[0];
+          } else if (apiDateString.includes('T')) {
+            apiDateString = apiDateString.split('T')[0];
+          }
+          // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(apiDateString)) {
+            const dateObj = new Date(a.availability_date + 'T00:00:00');
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            apiDateString = `${year}-${month}-${day}`;
+          }
+        } else {
+          // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+          const dateObj = new Date(a.availability_date);
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          apiDateString = `${year}-${month}-${day}`;
+        }
+        return apiDateString === dateStr;
+      });
+
+      console.log('Date to remove:', dateStr, 'Found availabilities:', dateAvailabilities);
 
       if (dateAvailabilities.length === 0) {
         await Swal.fire({
@@ -598,8 +863,8 @@ export function AvailabilityManager({ adminUser }: Props) {
         return;
       }
 
-      // Delete all availabilities for this date
-      const deletePromises = dateAvailabilities.map(avail =>
+      // Delete all availabilities for this date using IDs from API
+      const deletePromises = dateAvailabilities.map((avail: any) =>
         fetch(`/api/availability/${avail.id}`, {
           method: 'DELETE',
           headers: {
@@ -609,15 +874,21 @@ export function AvailabilityManager({ adminUser }: Props) {
         })
       );
 
-      await Promise.all(deletePromises);
+      const deleteResults = await Promise.all(deletePromises);
+      
+      // Check if all deletions were successful
+      const failedDeletions = deleteResults.filter(r => !r.ok);
+      if (failedDeletions.length > 0) {
+        console.error('Some deletions failed:', failedDeletions);
+        throw new Error('Bazı müsaitlikler silinemedi');
+      }
 
-      // Remove deleted availabilities from state immediately
-      const remainingAvailabilities = availabilities.filter(a => a.availabilityDate !== dateStr);
-      setAvailabilities(remainingAvailabilities);
-
+      // Reload availabilities from API to ensure state is in sync
+      await loadAvailabilities();
+      
       // If viewing this date, update time slots
       if (selectedDate === dateStr) {
-        setSelectedTimeSlots([]);
+        await loadTimeSlotsForDate(selectedDate);
       }
 
       await Swal.fire({
@@ -730,6 +1001,22 @@ export function AvailabilityManager({ adminUser }: Props) {
             const dayOfWeek = getDayOfWeek(date);
             const dayName = dayNames[dayOfWeek];
             const isPast = dateStr < todayStr;
+            
+            // Debug: Log week day info
+            if (idx === 0) {
+              console.log('Week days:', weekDays.map(d => ({
+                date: formatDate(d),
+                dayName: dayNames[getDayOfWeek(d)],
+                dayOfWeek: d.getDay(),
+                fullDate: d.toString()
+              })), 'Current week start:', formatDate(currentWeekStart), 'Selected date:', selectedDate);
+            }
+            
+            // Debug: Log each day's info when clicked
+            const handleDayClick = () => {
+              console.log('Day clicked - Index:', idx, 'Date object:', date, 'Formatted:', dateStr, 'Day name:', dayName, 'Day of week:', date.getDay());
+              handleDateSelect(date);
+            };
 
             // Count appointments for this day
             const dayAppointments = appointments.filter(apt => apt.date === dateStr && apt.status === 'approved');
@@ -740,7 +1027,7 @@ export function AvailabilityManager({ adminUser }: Props) {
             return (
               <div key={idx} className="relative">
                 <button
-                  onClick={() => handleDateSelect(date)}
+                  onClick={handleDayClick}
                   className={`w-full p-3 sm:p-4 rounded-lg border-2 transition text-center ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50'
@@ -867,7 +1154,7 @@ export function AvailabilityManager({ adminUser }: Props) {
                         onClick={() => 
                           isAvailable 
                             ? handleRemoveTimeSlot(timeSlot)
-                            : handleAddTimeSlot(timeSlot)
+                            : handleAddTimeSlot(timeSlot, selectedDate)
                         }
                         className={`w-full py-1.5 px-2 rounded text-xs font-medium transition ${
                           isAvailable

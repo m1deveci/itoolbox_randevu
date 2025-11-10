@@ -54,15 +54,12 @@ module.exports = (pool) => {
       const userId = req.headers['x-user-id'] || null;
       const userName = req.headers['x-user-name'] || 'System';
       
-      // Update setting
-      const [result] = await pool.execute(
-        'UPDATE settings SET value = ? WHERE key_name = ?',
-        [value, req.params.key]
+      // Insert or update setting (ON DUPLICATE KEY UPDATE)
+      await pool.execute(
+        `INSERT INTO settings (key_name, value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE value = VALUES(value)`,
+        [req.params.key, value]
       );
-      
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: 'Setting not found' });
-      }
       
       // Log activity
       await pool.execute(
@@ -167,6 +164,101 @@ module.exports = (pool) => {
     } catch (error) {
       console.error('Error creating activity log:', error);
       res.status(500).json({ error: 'Failed to create activity log' });
+    }
+  });
+
+  // POST /api/settings/test-smtp - Test SMTP connection
+  router.post('/test-smtp', async (req, res) => {
+    try {
+      const { smtp_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name } = req.body;
+      const userId = req.headers['x-user-id'] || null;
+      const userName = req.headers['x-user-name'] || 'System';
+
+      if (smtp_enabled !== 'true') {
+        return res.status(400).json({ error: 'SMTP is not enabled' });
+      }
+
+      if (!smtp_host || !smtp_port || !smtp_user || !smtp_from_email) {
+        return res.status(400).json({ error: 'SMTP host, port, user, and from email are required' });
+      }
+
+      // Try to connect to SMTP server
+      const nodemailer = require('nodemailer');
+      
+      const transporter = nodemailer.createTransport({
+        host: smtp_host,
+        port: parseInt(smtp_port) || 587,
+        secure: parseInt(smtp_port) === 465, // true for 465, false for other ports
+        auth: {
+          user: smtp_user,
+          pass: smtp_password
+        },
+        tls: {
+          rejectUnauthorized: false // For self-signed certificates
+        }
+      });
+
+      // Verify connection
+      await transporter.verify();
+
+      // Try to send a test email
+      const testEmail = {
+        from: `"${smtp_from_name || 'IT Randevu Sistemi'}" <${smtp_from_email}>`,
+        to: smtp_from_email, // Send test email to from_email address
+        subject: 'SMTP Test - IT Randevu Sistemi',
+        text: 'Bu bir test e-postasıdır. SMTP ayarlarınız doğru çalışıyor.',
+        html: '<p>Bu bir test e-postasıdır. SMTP ayarlarınız doğru çalışıyor.</p>'
+      };
+
+      await transporter.sendMail(testEmail);
+
+      // Log activity
+      await pool.execute(
+        `INSERT INTO activity_logs (user_id, user_name, action, entity_type, details, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          userName,
+          'test_smtp',
+          'settings',
+          JSON.stringify({ smtp_host, smtp_port, smtp_user, smtp_from_email }),
+          req.ip || req.headers['x-forwarded-for'] || 'unknown',
+          req.headers['user-agent'] || 'unknown'
+        ]
+      );
+
+      res.json({ 
+        message: 'SMTP bağlantısı başarıyla test edildi ve test e-postası gönderildi',
+        success: true
+      });
+    } catch (error) {
+      console.error('Error testing SMTP:', error);
+      
+      // Log failed test
+      const userId = req.headers['x-user-id'] || null;
+      const userName = req.headers['x-user-name'] || 'System';
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'test_smtp_failed',
+            'settings',
+            JSON.stringify({ error: error.message }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging failed SMTP test:', logError);
+      }
+
+      res.status(500).json({ 
+        error: error.message || 'SMTP bağlantısı test edilemedi',
+        details: error.code || 'UNKNOWN_ERROR'
+      });
     }
   });
 

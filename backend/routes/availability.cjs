@@ -70,6 +70,24 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Start time must be before end time' });
       }
 
+      // Check for overlapping availabilities
+      const [overlapping] = await pool.execute(
+        `SELECT id FROM availability 
+         WHERE expert_id = ? AND day_of_week = ? 
+         AND (
+           (start_time <= ? AND end_time > ?) OR
+           (start_time < ? AND end_time >= ?) OR
+           (start_time >= ? AND end_time <= ?)
+         )`,
+        [expertId, dayOfWeek, startTime, startTime, endTime, endTime, startTime, endTime]
+      );
+
+      if (overlapping.length > 0) {
+        return res.status(409).json({ 
+          error: 'Bu saat aralığı mevcut bir müsaitlik ile çakışıyor' 
+        });
+      }
+
       // Auto-create expert if not exists (for logged-in admins from ittoolbox)
       const expertName = adminName || 'Admin User';
       const expertEmail = adminEmail || `admin_${expertId}@example.com`;

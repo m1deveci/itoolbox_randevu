@@ -101,7 +101,9 @@ export function AppointmentBooking() {
 
     // Get day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
     const date = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = date.getDay(); // 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
+    const jsDayOfWeek = date.getDay(); // 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
+    // Convert to our format: 0=Pazartesi, 1=Salı, ..., 6=Pazar
+    const dayOfWeek = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
 
     // Filter availabilities for this day of week
     const dayAvailabilities = availabilities.filter(
@@ -601,22 +603,6 @@ export function AppointmentBooking() {
               </p>
             </div>
           )}
-        </div>
-
-        {/* Features */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <div className="text-blue-500 text-2xl mb-2">✓</div>
-            <p className="text-xs sm:text-sm font-medium text-gray-700">Hızlı İşlem</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <div className="text-blue-500 text-2xl mb-2">🛡️</div>
-            <p className="text-xs sm:text-sm font-medium text-gray-700">Güvenli</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <div className="text-blue-500 text-2xl mb-2">24/7</div>
-            <p className="text-xs sm:text-sm font-medium text-gray-700">Her Zaman</p>
-          </div>
         </div>
       </div>
 

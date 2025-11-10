@@ -149,7 +149,37 @@ module.exports = (pool) => {
         return res.status(404).json({ error: 'Expert not found' });
       }
 
-      // Check if time slot is available
+      // Check if expert has availability for this date and time
+      const appointmentDateObj = new Date(appointmentDate + 'T00:00:00');
+      const dayOfWeek = appointmentDateObj.getDay(); // 0=Sunday, 1=Monday, etc.
+      // Convert to our day format (Monday=0, Sunday=6)
+      const dayOfWeekFormatted = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+      // Get expert's availabilities for this day of week
+      const [availabilities] = await pool.execute(
+        `SELECT start_time, end_time FROM availability
+         WHERE expert_id = ? AND day_of_week = ?`,
+        [expertId, dayOfWeekFormatted]
+      );
+
+      if (availabilities.length === 0) {
+        return res.status(400).json({ error: 'Expert has no availability for this day' });
+      }
+
+      // Check if the requested time falls within any availability slot
+      const requestedTime = new Date(`2000-01-01T${appointmentTime}`);
+      const isTimeAvailable = availabilities.some((avail) => {
+        const startTime = new Date(`2000-01-01T${avail.start_time}`);
+        const endTime = new Date(`2000-01-01T${avail.end_time}`);
+        // Check if requested time is at the start of an hour slot and within availability
+        return requestedTime >= startTime && requestedTime < endTime;
+      });
+
+      if (!isTimeAvailable) {
+        return res.status(400).json({ error: 'Selected time is not available for this expert' });
+      }
+
+      // Check if time slot is already booked
       const [conflicts] = await pool.execute(
         `SELECT id FROM appointments
          WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?

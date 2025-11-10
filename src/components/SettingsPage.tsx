@@ -37,11 +37,21 @@ export function SettingsPage({ adminUser }: Props) {
   const [settings, setSettings] = useState<Settings>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'smtp' | 'logs'>('general');
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsPage, setLogsPage] = useState(1);
   const [logsTotal, setLogsTotal] = useState(0);
+  const [smtpSettings, setSmtpSettings] = useState({
+    smtp_enabled: 'false',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_password: '',
+    smtp_from_email: '',
+    smtp_from_name: 'IT Randevu Sistemi'
+  });
 
   useEffect(() => {
     loadSettings();
@@ -60,6 +70,17 @@ export function SettingsPage({ adminUser }: Props) {
       if (!response.ok) throw new Error('Failed to fetch settings');
       const data = await response.json();
       setSettings(data);
+      
+      // Load SMTP settings into state
+      setSmtpSettings({
+        smtp_enabled: data.smtp_enabled?.value || 'false',
+        smtp_host: data.smtp_host?.value || '',
+        smtp_port: data.smtp_port?.value || '587',
+        smtp_user: data.smtp_user?.value || '',
+        smtp_password: data.smtp_password?.value || '',
+        smtp_from_email: data.smtp_from_email?.value || '',
+        smtp_from_name: data.smtp_from_name?.value || 'IT Randevu Sistemi'
+      });
     } catch (error) {
       console.error('Error loading settings:', error);
       await Swal.fire({
@@ -134,6 +155,88 @@ export function SettingsPage({ adminUser }: Props) {
   const handleSave = async (key: string) => {
     const value = settings[key]?.value || '';
     await updateSetting(key, value);
+  };
+
+  const handleSaveAllSmtp = async () => {
+    setSaving(true);
+    try {
+      // Save all SMTP settings
+      const promises = Object.entries(smtpSettings).map(([key, value]) =>
+        updateSetting(key, value)
+      );
+      
+      await Promise.all(promises);
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Başarılı',
+        text: 'Tüm SMTP ayarları kaydedildi',
+        confirmButtonColor: '#3b82f6',
+        timer: 1500
+      });
+    } catch (error) {
+      console.error('Error saving SMTP settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    if (!smtpSettings.smtp_enabled || smtpSettings.smtp_enabled === 'false') {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'SMTP Pasif',
+        text: 'SMTP ayarlarını test etmek için önce SMTP\'yi aktifleştirin',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    if (!smtpSettings.smtp_host || !smtpSettings.smtp_user || !smtpSettings.smtp_from_email) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Eksik Bilgi',
+        text: 'SMTP Host, Kullanıcı Adı ve Gönderen E-posta alanları doldurulmalıdır',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const response = await fetch('/api/settings/test-smtp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || ''
+        },
+        body: JSON.stringify(smtpSettings)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'SMTP test başarısız');
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'SMTP Test Başarılı',
+        text: data.message || 'SMTP bağlantısı başarıyla test edildi',
+        confirmButtonColor: '#3b82f6'
+      });
+    } catch (error) {
+      console.error('Error testing SMTP:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'SMTP Test Başarısız',
+        text: error instanceof Error ? error.message : 'SMTP bağlantısı test edilemedi',
+        confirmButtonColor: '#ef4444'
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
   const getActionText = (action: string) => {
@@ -266,13 +369,12 @@ export function SettingsPage({ adminUser }: Props) {
             <label className="flex items-center gap-2 mb-2">
               <input
                 type="checkbox"
-                checked={settings.smtp_enabled?.value === 'true'}
+                checked={smtpSettings.smtp_enabled === 'true'}
                 onChange={(e) => {
-                  setSettings(prev => ({
+                  setSmtpSettings(prev => ({
                     ...prev,
-                    smtp_enabled: { ...prev.smtp_enabled, value: e.target.checked ? 'true' : 'false' }
+                    smtp_enabled: e.target.checked ? 'true' : 'false'
                   }));
-                  handleSave('smtp_enabled');
                 }}
                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
               />
@@ -284,126 +386,86 @@ export function SettingsPage({ adminUser }: Props) {
           {/* SMTP Host */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              SMTP Sunucu
+              SMTP Sunucu <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={settings.smtp_host?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_host}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_host: { ...prev.smtp_host, value: e.target.value }
+                smtp_host: e.target.value
               }))}
               placeholder="smtp.example.com"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            <button
-              onClick={() => handleSave('smtp_host')}
-              disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
-            </button>
           </div>
 
           {/* SMTP Port */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              SMTP Port
+              SMTP Port <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
-              value={settings.smtp_port?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_port}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_port: { ...prev.smtp_port, value: e.target.value }
+                smtp_port: e.target.value
               }))}
               placeholder="587"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            <button
-              onClick={() => handleSave('smtp_port')}
-              disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
-            </button>
           </div>
 
           {/* SMTP User */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              SMTP Kullanıcı Adı
+              SMTP Kullanıcı Adı <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={settings.smtp_user?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_user}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_user: { ...prev.smtp_user, value: e.target.value }
+                smtp_user: e.target.value
               }))}
               placeholder="user@example.com"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            <button
-              onClick={() => handleSave('smtp_user')}
-              disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
-            </button>
           </div>
 
           {/* SMTP Password */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              SMTP Şifre
+              SMTP Şifre <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
-              value={settings.smtp_password?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_password}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_password: { ...prev.smtp_password, value: e.target.value }
+                smtp_password: e.target.value
               }))}
               placeholder="••••••••"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            <button
-              onClick={() => handleSave('smtp_password')}
-              disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
-            </button>
           </div>
 
           {/* SMTP From Email */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Gönderen E-posta
+              Gönderen E-posta <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
-              value={settings.smtp_from_email?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_from_email}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_from_email: { ...prev.smtp_from_email, value: e.target.value }
+                smtp_from_email: e.target.value
               }))}
               placeholder="noreply@example.com"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            <button
-              onClick={() => handleSave('smtp_from_email')}
-              disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
-            </button>
           </div>
 
           {/* SMTP From Name */}
@@ -413,21 +475,42 @@ export function SettingsPage({ adminUser }: Props) {
             </label>
             <input
               type="text"
-              value={settings.smtp_from_name?.value || ''}
-              onChange={(e) => setSettings(prev => ({
+              value={smtpSettings.smtp_from_name}
+              onChange={(e) => setSmtpSettings(prev => ({
                 ...prev,
-                smtp_from_name: { ...prev.smtp_from_name, value: e.target.value }
+                smtp_from_name: e.target.value
               }))}
               placeholder="IT Randevu Sistemi"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t">
             <button
-              onClick={() => handleSave('smtp_from_name')}
+              onClick={handleSaveAllSmtp}
               disabled={saving}
-              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
             >
-              <Save size={16} className="inline mr-2" />
-              Kaydet
+              <Save size={18} />
+              Tüm SMTP Ayarlarını Kaydet
+            </button>
+            <button
+              onClick={handleTestSmtp}
+              disabled={testing || saving}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              {testing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Test Ediliyor...
+                </>
+              ) : (
+                <>
+                  <Mail size={18} />
+                  SMTP Test Et
+                </>
+              )}
             </button>
           </div>
         </div>

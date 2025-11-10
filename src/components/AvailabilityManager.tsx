@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 
 interface Availability {
   id: string;
-  dayOfWeek: number;
+  availabilityDate: string;
   startTime: string;
   endTime: string;
 }
@@ -179,7 +179,7 @@ export function AvailabilityManager({ adminUser }: Props) {
       const data = await response.json();
       const mapped = data.map((a: any) => ({
         id: a.id.toString(),
-        dayOfWeek: a.day_of_week,
+        availabilityDate: a.availability_date,
         startTime: a.start_time ? a.start_time.substring(0, 5) : '', // "HH:MM" format
         endTime: a.end_time ? a.end_time.substring(0, 5) : '' // "HH:MM" format
       }));
@@ -212,28 +212,25 @@ export function AvailabilityManager({ adminUser }: Props) {
   const loadTimeSlotsForDate = async (date: string) => {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId) return;
-    
+
     try {
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
-      
-      const dateObj = new Date(date + 'T00:00:00');
-      const dayOfWeek = getDayOfWeek(dateObj);
-      
-      // Get availability for this day of week
-      const dayAvailabilities = data.filter((a: any) => a.day_of_week === dayOfWeek);
-      
+
+      // Get availability for this specific date
+      const dateAvailabilities = data.filter((a: any) => a.availability_date === date);
+
       // Get all time slots from availabilities (exact startTime matches)
       const availableSlots: string[] = [];
-      dayAvailabilities.forEach((avail: any) => {
+      dateAvailabilities.forEach((avail: any) => {
         const startTime = avail.start_time.substring(0, 5); // "HH:MM"
         // Only add if it's in our TIME_SLOTS list and not already added
         if (TIME_SLOTS.includes(startTime) && !availableSlots.includes(startTime)) {
           availableSlots.push(startTime);
         }
       });
-      
+
       setSelectedTimeSlots(availableSlots.sort());
     } catch (error) {
       console.error('Error loading time slots:', error);
@@ -273,7 +270,7 @@ export function AvailabilityManager({ adminUser }: Props) {
   const handleAddTimeSlot = async (timeSlot: string) => {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId || !selectedDate) return;
-    
+
     // Check if time slot is in the past
     if (isTimeSlotPast(selectedDate, timeSlot)) {
       await Swal.fire({
@@ -284,20 +281,17 @@ export function AvailabilityManager({ adminUser }: Props) {
       });
       return;
     }
-    
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = getDayOfWeek(dateObj);
-    
+
     // Calculate end time: same hour, 59 minutes (e.g., 09:00 -> 09:59)
     const [hours, minutes] = timeSlot.split(':').map(Number);
     const endTime = `${String(hours).padStart(2, '0')}:59`;
-    
-    // Check if this time slot already exists (any endTime with same startTime)
+
+    // Check if this time slot already exists for this date
     const existing = availabilities.find(
-      a => a.dayOfWeek === dayOfWeek && 
+      a => a.availabilityDate === selectedDate &&
       a.startTime === timeSlot
     );
-    
+
     if (existing) {
       // If exists but with different endTime, update it
       if (existing.endTime !== endTime) {
@@ -310,24 +304,24 @@ export function AvailabilityManager({ adminUser }: Props) {
           cancelButtonText: 'İptal',
           confirmButtonColor: '#3b82f6'
         });
-        
+
         if (result.isConfirmed) {
           try {
             const updateResponse = await fetch(`/api/availability/${existing.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                dayOfWeek: dayOfWeek,
+                availabilityDate: selectedDate,
                 startTime: timeSlot,
                 endTime: endTime
               })
             });
-            
+
             if (!updateResponse.ok) throw new Error('Failed to update availability');
-            
+
             await loadAvailabilities();
             await loadTimeSlotsForDate(selectedDate);
-            
+
             await Swal.fire({
               icon: 'success',
               title: 'Başarılı',
@@ -364,7 +358,7 @@ export function AvailabilityManager({ adminUser }: Props) {
       const selectedExpert = experts.find(e => e.id === expertId) || adminUser;
       const requestBody = {
         expertId: expertId,
-        dayOfWeek: dayOfWeek,
+        availabilityDate: selectedDate,
         startTime: timeSlot,
         endTime: endTime,
         adminName: adminUser?.name || selectedExpert?.name || 'Admin',
@@ -392,7 +386,7 @@ export function AvailabilityManager({ adminUser }: Props) {
       // Small delay to ensure state is updated
       await new Promise(resolve => setTimeout(resolve, 100));
       await loadTimeSlotsForDate(selectedDate);
-      
+
       await Swal.fire({
         icon: 'success',
         title: 'Başarılı',
@@ -400,7 +394,7 @@ export function AvailabilityManager({ adminUser }: Props) {
         confirmButtonColor: '#3b82f6',
         timer: 1500
       });
-      
+
       // Force re-render by reloading availabilities again
       await loadAvailabilities();
     } catch (error) {
@@ -417,7 +411,7 @@ export function AvailabilityManager({ adminUser }: Props) {
   const handleRemoveTimeSlot = async (timeSlot: string) => {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId || !selectedDate) return;
-    
+
     // Check if time slot is in the past
     if (isTimeSlotPast(selectedDate, timeSlot)) {
       await Swal.fire({
@@ -428,16 +422,13 @@ export function AvailabilityManager({ adminUser }: Props) {
       });
       return;
     }
-    
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = getDayOfWeek(dateObj);
-    
-    // Find availability with exact startTime match
+
+    // Find availability with exact date and startTime match
     const availability = availabilities.find(
-      a => a.dayOfWeek === dayOfWeek && 
+      a => a.availabilityDate === selectedDate &&
       a.startTime === timeSlot
     );
-    
+
     if (!availability) return;
 
     const result = await Swal.fire({
@@ -507,25 +498,22 @@ export function AvailabilityManager({ adminUser }: Props) {
 
   const isTimeSlotAvailable = (timeSlot: string): boolean => {
     if (!selectedDate) return false;
-    
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = getDayOfWeek(dateObj);
-    
+
     // Normalize timeSlot format (ensure HH:MM format)
     const normalizedTimeSlot = timeSlot.length === 5 ? timeSlot : timeSlot.substring(0, 5);
-    
-    // Check if this exact time slot exists (startTime matches exactly)
+
+    // Check if this exact time slot exists for this date
     const isAvailable = availabilities.some(
       a => {
-        if (!a || !a.startTime) return false;
-        const normalizedStartTime = a.startTime.length >= 5 
-          ? a.startTime.substring(0, 5) 
+        if (!a || !a.startTime || !a.availabilityDate) return false;
+        const normalizedStartTime = a.startTime.length >= 5
+          ? a.startTime.substring(0, 5)
           : a.startTime;
-        return a.dayOfWeek === dayOfWeek && 
+        return a.availabilityDate === selectedDate &&
         normalizedStartTime === normalizedTimeSlot;
       }
     );
-    
+
     return isAvailable;
   };
 
@@ -561,8 +549,6 @@ export function AvailabilityManager({ adminUser }: Props) {
     if (!expertId) return;
 
     const dateStr = formatDate(date);
-    const dateObj = new Date(dateStr + 'T00:00:00');
-    const dayOfWeek = getDayOfWeek(dateObj);
 
     const result = await Swal.fire({
       title: 'Tüm Müsaitlikleri Kaldır',
@@ -578,10 +564,10 @@ export function AvailabilityManager({ adminUser }: Props) {
     if (!result.isConfirmed) return;
 
     try {
-      // Get all availabilities for this day
-      const dayAvailabilities = availabilities.filter(a => a.dayOfWeek === dayOfWeek);
-      
-      if (dayAvailabilities.length === 0) {
+      // Get all availabilities for this date
+      const dateAvailabilities = availabilities.filter(a => a.availabilityDate === dateStr);
+
+      if (dateAvailabilities.length === 0) {
         await Swal.fire({
           icon: 'info',
           title: 'Müsaitlik Yok',
@@ -591,8 +577,8 @@ export function AvailabilityManager({ adminUser }: Props) {
         return;
       }
 
-      // Delete all availabilities for this day
-      const deletePromises = dayAvailabilities.map(avail =>
+      // Delete all availabilities for this date
+      const deletePromises = dateAvailabilities.map(avail =>
         fetch(`/api/availability/${avail.id}`, {
           method: 'DELETE',
           headers: {
@@ -603,12 +589,12 @@ export function AvailabilityManager({ adminUser }: Props) {
       );
 
       await Promise.all(deletePromises);
-      
+
       await loadAvailabilities();
       if (selectedDate === dateStr) {
         await loadTimeSlotsForDate(selectedDate);
       }
-      
+
       await Swal.fire({
         icon: 'success',
         title: 'Başarılı',
@@ -719,12 +705,12 @@ export function AvailabilityManager({ adminUser }: Props) {
             const dayOfWeek = getDayOfWeek(date);
             const dayName = dayNames[dayOfWeek];
             const isPast = dateStr < todayStr;
-            
+
             // Count appointments for this day
             const dayAppointments = appointments.filter(apt => apt.date === dateStr && apt.status === 'approved');
-            
-            // Count availabilities for this day
-            const dayAvailabilities = availabilities.filter(a => a.dayOfWeek === dayOfWeek);
+
+            // Count availabilities for this date
+            const dayAvailabilities = availabilities.filter(a => a.availabilityDate === dateStr);
             
             return (
               <div key={idx} className="relative">

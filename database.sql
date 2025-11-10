@@ -11,18 +11,18 @@ CREATE TABLE IF NOT EXISTS experts (
   INDEX idx_role (role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Create availability table (days and hours when experts are available)
+-- Create availability table (specific dates and hours when experts are available)
 CREATE TABLE IF NOT EXISTS availability (
   id INT AUTO_INCREMENT PRIMARY KEY,
   expert_id INT NOT NULL,
-  day_of_week INT NOT NULL COMMENT '0=Sunday, 1=Monday, ..., 6=Saturday',
+  availability_date DATE NOT NULL COMMENT 'Specific date for which availability is set',
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (expert_id) REFERENCES experts(id) ON DELETE CASCADE,
-  INDEX idx_expert_day (expert_id, day_of_week),
-  UNIQUE KEY uk_expert_day (expert_id, day_of_week, start_time, end_time)
+  INDEX idx_expert_date (expert_id, availability_date),
+  UNIQUE KEY uk_expert_date (expert_id, availability_date, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create appointments table

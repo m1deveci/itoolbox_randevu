@@ -7,7 +7,7 @@ module.exports = (pool) => {
     try {
       const expertId = req.query.expertId;
       let query = `
-        SELECT a.id, a.expert_id, a.day_of_week, a.start_time, a.end_time,
+        SELECT a.id, a.expert_id, a.availability_date, a.start_time, a.end_time,
                e.name as expert_name, a.created_at
         FROM availability a
         JOIN experts e ON a.expert_id = e.id
@@ -19,7 +19,7 @@ module.exports = (pool) => {
         params.push(expertId);
       }
 
-      query += ' ORDER BY a.expert_id, a.day_of_week, a.start_time';
+      query += ' ORDER BY a.expert_id, a.availability_date, a.start_time';
 
       const [availabilities] = await pool.execute(query, params);
       res.json(availabilities);
@@ -33,7 +33,7 @@ module.exports = (pool) => {
   router.get('/:id', async (req, res) => {
     try {
       const [availabilities] = await pool.execute(
-        `SELECT a.id, a.expert_id, a.day_of_week, a.start_time, a.end_time,
+        `SELECT a.id, a.expert_id, a.availability_date, a.start_time, a.end_time,
                 e.name as expert_name, a.created_at
          FROM availability a
          JOIN experts e ON a.expert_id = e.id
@@ -55,31 +55,33 @@ module.exports = (pool) => {
   // POST /api/availability - Create new availability
   router.post('/', async (req, res) => {
     try {
-      const { expertId, dayOfWeek, startTime, endTime, adminName, adminEmail } = req.body;
+      const { expertId, availabilityDate, startTime, endTime, adminName, adminEmail } = req.body;
 
       // Validate input
-      if (expertId === undefined || dayOfWeek === undefined || !startTime || !endTime) {
+      if (expertId === undefined || !availabilityDate || !startTime || !endTime) {
         return res.status(400).json({ error: 'All fields are required' });
       }
 
-      if (dayOfWeek < 0 || dayOfWeek > 6) {
-        return res.status(400).json({ error: 'Day of week must be 0-6' });
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(availabilityDate)) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
       }
 
       if (startTime >= endTime) {
         return res.status(400).json({ error: 'Start time must be before end time' });
       }
 
-      // Check for exact duplicate (same startTime for same day)
+      // Check for exact duplicate (same startTime for same date)
       const [duplicate] = await pool.execute(
-        `SELECT id FROM availability 
-         WHERE expert_id = ? AND day_of_week = ? AND start_time = ?`,
-        [expertId, dayOfWeek, startTime]
+        `SELECT id FROM availability
+         WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
+        [expertId, availabilityDate, startTime]
       );
 
       if (duplicate.length > 0) {
-        return res.status(409).json({ 
-          error: 'Bu saat zaten müsaitlik olarak tanımlı' 
+        return res.status(409).json({
+          error: 'Bu saat zaten müsaitlik olarak tanımlı'
         });
       }
 
@@ -138,14 +140,14 @@ module.exports = (pool) => {
       }
 
       const [result] = await pool.execute(
-        'INSERT INTO availability (expert_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)',
-        [finalExpertId, dayOfWeek, startTime, endTime]
+        'INSERT INTO availability (expert_id, availability_date, start_time, end_time) VALUES (?, ?, ?, ?)',
+        [finalExpertId, availabilityDate, startTime, endTime]
       );
 
       // Log activity
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
       const userName = req.headers['x-user-name'] || adminName || 'System';
-      
+
       try {
         // Get expert name for log
         const [expertData] = await pool.execute(
@@ -167,7 +169,7 @@ module.exports = (pool) => {
               availability_id: result.insertId,
               expert_id: finalExpertId,
               expert_name: expertName,
-              day_of_week: dayOfWeek,
+              availability_date: availabilityDate,
               start_time: startTime,
               end_time: endTime
             }),
@@ -183,7 +185,7 @@ module.exports = (pool) => {
       res.status(201).json({
         id: result.insertId,
         expertId: finalExpertId,
-        dayOfWeek,
+        availabilityDate,
         startTime,
         endTime,
         created_at: new Date().toISOString()
@@ -200,14 +202,16 @@ module.exports = (pool) => {
   // PUT /api/availability/:id - Update availability
   router.put('/:id', async (req, res) => {
     try {
-      const { dayOfWeek, startTime, endTime } = req.body;
+      const { availabilityDate, startTime, endTime } = req.body;
 
-      if (dayOfWeek === undefined || !startTime || !endTime) {
+      if (!availabilityDate || !startTime || !endTime) {
         return res.status(400).json({ error: 'All fields are required' });
       }
 
-      if (dayOfWeek < 0 || dayOfWeek > 6) {
-        return res.status(400).json({ error: 'Day of week must be 0-6' });
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(availabilityDate)) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
       }
 
       if (startTime >= endTime) {
@@ -215,8 +219,8 @@ module.exports = (pool) => {
       }
 
       const [result] = await pool.execute(
-        'UPDATE availability SET day_of_week = ?, start_time = ?, end_time = ? WHERE id = ?',
-        [dayOfWeek, startTime, endTime, req.params.id]
+        'UPDATE availability SET availability_date = ?, start_time = ?, end_time = ? WHERE id = ?',
+        [availabilityDate, startTime, endTime, req.params.id]
       );
 
       if (result.affectedRows === 0) {
@@ -225,7 +229,7 @@ module.exports = (pool) => {
 
       res.json({
         id: req.params.id,
-        dayOfWeek,
+        availabilityDate,
         startTime,
         endTime
       });
@@ -284,7 +288,7 @@ module.exports = (pool) => {
               availability_id: availabilityId,
               expert_id: availability.expert_id,
               expert_name: availability.expert_name,
-              day_of_week: availability.day_of_week,
+              availability_date: availability.availability_date,
               start_time: availability.start_time,
               end_time: availability.end_time
             }),

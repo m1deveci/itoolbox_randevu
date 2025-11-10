@@ -383,7 +383,7 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       // Add new availability to state immediately
       const newAvailability: Availability = {
-        id: result.id.toString(),
+        id: data.id.toString(),
         availabilityDate: selectedDate,
         startTime: timeSlot,
         endTime: endTime

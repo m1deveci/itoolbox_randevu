@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS appointments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   expert_id INT NOT NULL,
   user_name VARCHAR(255) NOT NULL,
+  user_email VARCHAR(255) DEFAULT NULL,
+  user_phone VARCHAR(20) DEFAULT NULL,
   appointment_date DATE NOT NULL,
   appointment_time TIME NOT NULL,
   status ENUM('pending', 'approved', 'cancelled') DEFAULT 'pending',

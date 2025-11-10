@@ -68,15 +68,19 @@ export function AvailabilityManager({ adminUser }: Props) {
       }
 
       const slot = TIME_SLOTS[newAvailability.timeSlot];
+      const requestBody = {
+        expertId: adminUser.id,
+        dayOfWeek: newAvailability.dayOfWeek,
+        startTime: slot.start,
+        endTime: slot.end,
+        adminName: adminUser.name,
+        adminEmail: adminUser.email
+      };
+
       const response = await fetch('/api/availability', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          expertId: adminUser.id,
-          dayOfWeek: newAvailability.dayOfWeek,
-          startTime: slot.start,
-          endTime: slot.end
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();

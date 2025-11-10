@@ -4,10 +4,10 @@ const mysql = require('mysql2/promise');
 
 // Create connection pool for ittoolbox database
 const ittoolboxPool = mysql.createPool({
-  host: 'localhost',
-  user: 'toolbox_native',
-  password: 'GuvenliParola123!',
-  database: 'ittoolbox',
+  host: process.env.ITTOOLBOX_DB_HOST || 'localhost',
+  user: process.env.ITTOOLBOX_DB_USER || 'toolbox_native',
+  password: process.env.ITTOOLBOX_DB_PASSWORD || 'GuvenliParola123!',
+  database: process.env.ITTOOLBOX_DB_NAME || 'ittoolbox',
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,

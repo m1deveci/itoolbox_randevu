@@ -1,31 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 interface Appointment {
   id: string;
   userName: string;
   userEmail: string;
   userPhone: string;
+  ticketNo?: string;
   expertName: string;
+  expertId: number;
   date: string;
   time: string;
   status: 'pending' | 'approved' | 'cancelled';
 }
 
-export function AppointmentManagement() {
+interface AdminUser {
+  id: number; // Same ID as expert_id in randevu database
+  name: string;
+  email: string;
+  role: string;
+}
+
+interface Props {
+  adminUser: AdminUser | null;
+}
+
+export function AppointmentManagement({ adminUser }: Props) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadAppointments();
-  }, [filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, adminUser]);
 
   const loadAppointments = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filter !== 'all') {
+      
+      // adminUser.id is the same as expert_id in randevu database
+      const expertId = adminUser?.id;
+      
+      // If user is not superadmin, only show their own appointments
+      if (adminUser && adminUser.role !== 'superadmin' && expertId) {
+        params.append('expertId', expertId.toString());
+      }
+      
+      // If filter is 'my', show only current user's appointments
+      if (filter === 'my' && adminUser && expertId) {
+        params.append('expertId', expertId.toString());
+      } else if (filter !== 'all' && filter !== 'my') {
         params.append('status', filter);
       }
 
@@ -33,16 +60,25 @@ export function AppointmentManagement() {
       if (!response.ok) throw new Error('Failed to fetch appointments');
       const data = await response.json();
 
-      setAppointments(data.appointments.map((a: any) => ({
+      let mappedAppointments = data.appointments.map((a: any) => ({
         id: a.id.toString(),
         userName: a.user_name,
         userEmail: a.user_email,
         userPhone: a.user_phone,
+        ticketNo: a.ticket_no,
         expertName: a.expert_name,
+        expertId: a.expert_id,
         date: a.date.split('T')[0],
         time: a.time.substring(0, 5),
         status: a.status as 'pending' | 'approved' | 'cancelled'
-      })));
+      }));
+
+      // If filter is 'my', filter by expert ID client-side as well
+      if (filter === 'my' && adminUser) {
+        mappedAppointments = mappedAppointments.filter(a => a.expertId === adminUser.id);
+      }
+
+      setAppointments(mappedAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
     } finally {
@@ -66,27 +102,73 @@ export function AppointmentManagement() {
   };
 
   const handleCancel = async (id: string) => {
-    if (!window.confirm('Bu randevuyu iptal etmek istediğinize emin misiniz?')) {
+    const { value: cancellationReason } = await Swal.fire({
+      title: 'Randevuyu İptal Et',
+      text: 'İptal sebebini giriniz:',
+      input: 'textarea',
+      inputPlaceholder: 'İptal sebebini buraya yazın...',
+      inputAttributes: {
+        'aria-label': 'İptal sebebi'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'İptal Et',
+      cancelButtonText: 'Vazgeç',
+      confirmButtonColor: '#ef4444',
+      inputValidator: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'İptal sebebi gereklidir!';
+        }
+        if (value.trim().length < 5) {
+          return 'İptal sebebi en az 5 karakter olmalıdır!';
+        }
+      }
+    });
+
+    if (!cancellationReason) {
       return;
     }
 
     try {
       const response = await fetch(`/api/appointments/${id}/cancel`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancellationReason: cancellationReason.trim() })
       });
 
       if (!response.ok) throw new Error('Failed to cancel appointment');
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Randevu İptal Edildi',
+        text: 'Randevu başarıyla iptal edildi.',
+        confirmButtonColor: '#3b82f6'
+      });
+
       setAppointments(appointments.map(a => a.id === id ? { ...a, status: 'cancelled' } : a));
     } catch (error) {
       console.error('Error cancelling appointment:', error);
-      alert('Randevu iptal edilirken hata oluştu');
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Randevu iptal edilirken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
     }
   };
 
-  const filteredAppointments = filter === 'all'
-    ? appointments
-    : appointments.filter(a => a.status === filter);
+  const filteredAppointments = (() => {
+    if (filter === 'all') {
+      return appointments;
+    } else if (filter === 'my') {
+      // Already filtered in loadAppointments, but filter again for safety
+      if (adminUser) {
+        return appointments.filter(a => a.expertId === adminUser.id);
+      }
+      return appointments;
+    } else {
+      return appointments.filter(a => a.status === filter);
+    }
+  })();
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -95,6 +177,7 @@ export function AppointmentManagement() {
       {/* Filter Buttons - Mobile Responsive */}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
+          { label: 'Benim Randevularım', key: 'my' as const },
           { label: 'Tümü', key: 'all' as const },
           { label: 'Beklemede', key: 'pending' as const },
           { label: 'Onaylı', key: 'approved' as const },
@@ -135,6 +218,7 @@ export function AppointmentManagement() {
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Müşteri</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">E-posta</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Telefon</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Ticket No</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Uzman</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Tarih</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Saat</th>
@@ -148,6 +232,7 @@ export function AppointmentManagement() {
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.userName}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userEmail}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userPhone}</td>
+                      <td className="px-4 lg:px-6 py-3 text-sm font-mono">{apt.ticketNo || '-'}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.expertName}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.date}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.time}</td>
@@ -197,6 +282,9 @@ export function AppointmentManagement() {
                     <p className="font-semibold text-sm text-gray-900">{apt.userName}</p>
                     <p className="text-xs text-gray-600 truncate">{apt.userEmail}</p>
                     <p className="text-xs text-gray-600">{apt.userPhone}</p>
+                    {apt.ticketNo && (
+                      <p className="text-xs text-gray-600 font-mono">Ticket: {apt.ticketNo}</p>
+                    )}
                     <p className="font-medium text-xs text-gray-700 mt-2">{apt.expertName}</p>
                     <p className="text-xs text-gray-600">{apt.date} {apt.time}</p>
                   </div>

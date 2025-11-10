@@ -5,10 +5,10 @@ const bcrypt = require('bcryptjs');
 // Create connection pools
 const mysql = require('mysql2/promise');
 const ittoolboxPool = mysql.createPool({
-  host: 'localhost',
-  user: 'toolbox_native',
-  password: 'GuvenliParola123!',
-  database: 'ittoolbox',
+  host: process.env.ITTOOLBOX_DB_HOST || 'localhost',
+  user: process.env.ITTOOLBOX_DB_USER || 'toolbox_native',
+  password: process.env.ITTOOLBOX_DB_PASSWORD || 'GuvenliParola123!',
+  database: process.env.ITTOOLBOX_DB_NAME || 'ittoolbox',
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
@@ -16,10 +16,10 @@ const ittoolboxPool = mysql.createPool({
 });
 
 const randevuPool = mysql.createPool({
-  host: 'localhost',
-  user: 'randevu_user',
-  password: 'randevu_pass_secure_2024',
-  database: 'ittoolbox_randevu',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'randevu_user',
+  password: process.env.DB_PASSWORD || 'randevu_pass_secure_2024',
+  database: process.env.DB_NAME || 'ittoolbox_randevu',
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
@@ -54,8 +54,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Email veya şifre yanlış' });
     }
 
-    // Add/update admin as expert in randevu database
+    // Add/update admin as expert in randevu database using the same ID from ittoolbox
+    // This ensures ID consistency between ittoolbox users and randevu experts
     try {
+      // Use INSERT ... ON DUPLICATE KEY UPDATE to ensure expert exists with same ID
       await randevuPool.execute(
         `INSERT INTO experts (id, name, email) VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email)`,
@@ -67,6 +69,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Return user info (without password)
+    // expertId is same as id since we use the same ID from ittoolbox
     res.json({
       id: user.id,
       name: user.name,

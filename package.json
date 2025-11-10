@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "server": "node backend/server.js",
-    "server:dev": "nodemon backend/server.js",
+    "server": "node backend/server.cjs",
+    "server:dev": "nodemon backend/server.cjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
@@ -21,7 +21,9 @@
     "lucide-react": "^0.344.0",
     "mysql2": "^3.6.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.9.5",
+    "sweetalert2": "^11.26.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

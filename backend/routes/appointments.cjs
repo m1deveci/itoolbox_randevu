@@ -9,8 +9,8 @@ module.exports = (pool) => {
       const offset = (parseInt(page) - 1) * parseInt(limit);
 
       let query = `
-        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.appointment_date as date,
-               a.appointment_time as time, a.status, a.notes,
+        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+               a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
                e.name as expert_name, a.created_at
         FROM appointments a
         JOIN experts e ON a.expert_id = e.id
@@ -76,12 +76,36 @@ module.exports = (pool) => {
     }
   });
 
+  // GET /api/appointments/by-email/:email - Get appointments by email
+  router.get('/by-email/:email', async (req, res) => {
+    try {
+      const { email } = req.params;
+
+      const query = `
+        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+               a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
+               e.name as expert_name, a.created_at
+        FROM appointments a
+        JOIN experts e ON a.expert_id = e.id
+        WHERE a.user_email = ?
+        ORDER BY a.appointment_date DESC, a.appointment_time DESC
+      `;
+
+      const [appointments] = await pool.execute(query, [email]);
+
+      res.json({ appointments });
+    } catch (error) {
+      console.error('Error fetching appointments by email:', error);
+      res.status(500).json({ error: 'Failed to fetch appointments' });
+    }
+  });
+
   // GET /api/appointments/:id - Get appointment by ID
   router.get('/:id', async (req, res) => {
     try {
       const [appointments] = await pool.execute(
-        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.appointment_date as date,
-                a.appointment_time as time, a.status, a.notes,
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+                a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
                 e.name as expert_name, a.created_at
          FROM appointments a
          JOIN experts e ON a.expert_id = e.id
@@ -103,11 +127,16 @@ module.exports = (pool) => {
   // POST /api/appointments - Create new appointment
   router.post('/', async (req, res) => {
     try {
-      const { expertId, userName, userEmail, userPhone, appointmentDate, appointmentTime, notes } = req.body;
+      const { expertId, userName, userEmail, userPhone, ticketNo, appointmentDate, appointmentTime, notes } = req.body;
 
       // Validate input
-      if (!expertId || !userName || !userEmail || !userPhone || !appointmentDate || !appointmentTime) {
-        return res.status(400).json({ error: 'Expert ID, user name, email, phone, date, and time are required' });
+      if (!expertId || !userName || !userEmail || !userPhone || !ticketNo || !appointmentDate || !appointmentTime) {
+        return res.status(400).json({ error: 'Expert ID, user name, email, phone, ticket number, date, and time are required' });
+      }
+
+      // Validate ticket number format (INC0 + 6 digits = 10 characters total)
+      if (!/^INC0\d{6}$/.test(ticketNo)) {
+        return res.status(400).json({ error: 'Ticket number must be in format INC0XXXXXX (10 characters total)' });
       }
 
       // Check if expert exists
@@ -133,9 +162,9 @@ module.exports = (pool) => {
       }
 
       const [result] = await pool.execute(
-        `INSERT INTO appointments (expert_id, user_name, user_email, user_phone, appointment_date, appointment_time, status, notes)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
-        [expertId, userName, userEmail, userPhone, appointmentDate, appointmentTime, notes || null]
+        `INSERT INTO appointments (expert_id, user_name, user_email, user_phone, ticket_no, appointment_date, appointment_time, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [expertId, userName, userEmail, userPhone, ticketNo, appointmentDate, appointmentTime, notes || null]
       );
 
       res.status(201).json({
@@ -178,9 +207,11 @@ module.exports = (pool) => {
   // PUT /api/appointments/:id/cancel - Cancel/reject appointment
   router.put('/:id/cancel', async (req, res) => {
     try {
+      const { cancellationReason } = req.body;
+
       const [result] = await pool.execute(
-        'UPDATE appointments SET status = ? WHERE id = ?',
-        ['cancelled', req.params.id]
+        'UPDATE appointments SET status = ?, cancellation_reason = ? WHERE id = ?',
+        ['cancelled', cancellationReason || null, req.params.id]
       );
 
       if (result.affectedRows === 0) {

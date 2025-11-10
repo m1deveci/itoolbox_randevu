@@ -55,7 +55,7 @@ module.exports = (pool) => {
   // POST /api/availability - Create new availability
   router.post('/', async (req, res) => {
     try {
-      const { expertId, dayOfWeek, startTime, endTime } = req.body;
+      const { expertId, dayOfWeek, startTime, endTime, adminName, adminEmail } = req.body;
 
       // Validate input
       if (expertId === undefined || dayOfWeek === undefined || !startTime || !endTime) {
@@ -70,24 +70,68 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Start time must be before end time' });
       }
 
-      // Check if expert exists
-      const [experts] = await pool.execute(
+      // Auto-create expert if not exists (for logged-in admins from ittoolbox)
+      const expertName = adminName || 'Admin User';
+      const expertEmail = adminEmail || `admin_${expertId}@example.com`;
+      
+      let finalExpertId = expertId;
+      
+      // First, try to find expert by ID
+      let [existingExperts] = await pool.execute(
         'SELECT id FROM experts WHERE id = ?',
         [expertId]
       );
-
-      if (experts.length === 0) {
-        return res.status(404).json({ error: 'Expert not found' });
+      
+      // If not found by ID, try to find by email (in case ID mismatch)
+      if (existingExperts.length === 0 && expertEmail) {
+        [existingExperts] = await pool.execute(
+          'SELECT id FROM experts WHERE email = ?',
+          [expertEmail]
+        );
+        if (existingExperts.length > 0) {
+          finalExpertId = existingExperts[0].id;
+        }
+      }
+      
+      // If still not found, create new expert (let database assign ID if ID conflict)
+      if (existingExperts.length === 0) {
+        try {
+          // Try to insert with provided ID first
+          try {
+            await pool.execute(
+              'INSERT INTO experts (id, name, email) VALUES (?, ?, ?)',
+              [expertId, expertName, expertEmail]
+            );
+            finalExpertId = expertId;
+          } catch (idError) {
+            // If ID conflict, insert without ID (let AUTO_INCREMENT handle it)
+            if (idError.code === 'ER_DUP_ENTRY' || idError.errno === 1062) {
+              const [result] = await pool.execute(
+                'INSERT INTO experts (name, email) VALUES (?, ?)',
+                [expertName, expertEmail]
+              );
+              finalExpertId = result.insertId;
+            } else {
+              throw idError;
+            }
+          }
+        } catch (error) {
+          // If expert creation fails, return error instead of continuing
+          console.error('Error creating expert:', error);
+          return res.status(400).json({ 
+            error: 'Expert not found and could not be created. Please create the expert first.' 
+          });
+        }
       }
 
       const [result] = await pool.execute(
         'INSERT INTO availability (expert_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)',
-        [expertId, dayOfWeek, startTime, endTime]
+        [finalExpertId, dayOfWeek, startTime, endTime]
       );
 
       res.status(201).json({
         id: result.insertId,
-        expertId,
+        expertId: finalExpertId,
         dayOfWeek,
         startTime,
         endTime,

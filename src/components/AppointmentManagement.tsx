@@ -440,7 +440,6 @@ export function AppointmentManagement({ adminUser }: Props) {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Müşteri</th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">E-posta</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Telefon</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Ticket No</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-sm font-semibold">Uzman</th>
@@ -454,7 +453,6 @@ export function AppointmentManagement({ adminUser }: Props) {
                   {filteredAppointments.map((apt) => (
                     <tr key={apt.id} className="border-t hover:bg-gray-50">
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.userName}</td>
-                      <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userEmail}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userPhone}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono">{apt.ticketNo || '-'}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.expertName}</td>

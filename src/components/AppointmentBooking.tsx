@@ -691,7 +691,7 @@ export function AppointmentBooking() {
 
                   {/* Next Button */}
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const phoneDigits = phone.replace(/\D/g, '');
                       if (!fullName || !email || !phoneDigits) {
                         Swal.fire({
@@ -711,7 +711,31 @@ export function AppointmentBooking() {
                         });
                         return;
                       }
-                      setCurrentStep(2);
+
+                      // Check for pending appointment with same email and phone
+                      try {
+                        const response = await fetch(`/api/appointments/check-duplicate?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phoneDigits)}`);
+                        if (!response.ok) {
+                          throw new Error('Failed to check duplicate appointment');
+                        }
+                        const data = await response.json();
+
+                        if (data.hasPendingAppointment) {
+                          await Swal.fire({
+                            icon: 'warning',
+                            title: 'Zaten Beklemede Olan Randevu Var',
+                            text: data.message || 'Bu e-posta ve telefon numarası ile zaten bekleme durumunda bir randevu bulunmaktadır. Lütfen önceki randevunuzun durumunu kontrol ediniz.',
+                            confirmButtonColor: '#f59e0b'
+                          });
+                          return;
+                        }
+
+                        setCurrentStep(2);
+                      } catch (error) {
+                        console.error('Error checking duplicate appointment:', error);
+                        // If there's an error checking, still allow to proceed
+                        setCurrentStep(2);
+                      }
                     }}
                     className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition duration-200 text-sm sm:text-base"
                   >

@@ -176,6 +176,38 @@ module.exports = (pool) => {
 
   // ===== END LOCK ROUTES =====
 
+  // GET /api/appointments/check-duplicate - Check if pending appointment exists with same email and phone
+  router.get('/check-duplicate', async (req, res) => {
+    try {
+      const { email, phone } = req.query;
+
+      if (!email || !phone) {
+        return res.status(400).json({ error: 'Email and phone are required' });
+      }
+
+      // Remove any non-digit characters from phone for comparison
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      const [appointments] = await pool.execute(
+        `SELECT id, status FROM appointments
+         WHERE user_email = ? AND user_phone = ? AND status = 'pending'`,
+        [email, phoneDigits]
+      );
+
+      if (appointments.length > 0) {
+        return res.json({
+          hasPendingAppointment: true,
+          message: 'Bu e-posta ve telefon numarası ile zaten bekleme durumunda bir randevu bulunmaktadır.'
+        });
+      }
+
+      res.json({ hasPendingAppointment: false });
+    } catch (error) {
+      console.error('Error checking duplicate appointment:', error);
+      res.status(500).json({ error: 'Failed to check appointment' });
+    }
+  });
+
   // GET /api/appointments/by-email/:email - Get appointments by email
   router.get('/by-email/:email', async (req, res) => {
     try {

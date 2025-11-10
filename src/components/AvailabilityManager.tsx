@@ -368,10 +368,10 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       const response = await fetch('/api/availability', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || 'System'
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         },
         body: JSON.stringify(requestBody)
       });
@@ -449,11 +449,11 @@ export function AvailabilityManager({ adminUser }: Props) {
     if (!result.isConfirmed) return;
 
     try {
-      const response = await fetch(`/api/availability/${availability.id}`, { 
+      const response = await fetch(`/api/availability/${availability.id}`, {
         method: 'DELETE',
         headers: {
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || 'System'
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         }
       });
       
@@ -588,11 +588,11 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       // Delete all availabilities for this day
       const deletePromises = dayAvailabilities.map(avail =>
-        fetch(`/api/availability/${avail.id}`, { 
+        fetch(`/api/availability/${avail.id}`, {
           method: 'DELETE',
           headers: {
             'x-user-id': adminUser?.id?.toString() || '',
-            'x-user-name': adminUser?.name || 'System'
+            'x-user-name': encodeURIComponent(adminUser?.name || 'System')
           }
         })
       );

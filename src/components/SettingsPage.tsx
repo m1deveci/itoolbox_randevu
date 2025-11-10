@@ -120,7 +120,7 @@ export function SettingsPage({ adminUser }: Props) {
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || ''
+          'x-user-name': encodeURIComponent(adminUser?.name || '')
         },
         body: JSON.stringify({ value })
       });
@@ -209,7 +209,7 @@ export function SettingsPage({ adminUser }: Props) {
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || ''
+          'x-user-name': encodeURIComponent(adminUser?.name || '')
         },
         body: JSON.stringify(smtpSettings)
       });

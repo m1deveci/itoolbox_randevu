@@ -26,7 +26,7 @@ const randevuPool = mysql.createPool({
   timezone: '+03:00'
 });
 
-// POST /api/auth/login - Authenticate user from ittoolbox database
+// POST /api/auth/login - Authenticate user from ittoolbox_randevu experts table
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -35,9 +35,9 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email ve şifre gereklidir' });
     }
 
-    // Get user from ittoolbox database
-    const [users] = await ittoolboxPool.execute(
-      'SELECT id, name, email, password, role, avatar FROM users WHERE email = ? AND role IN (?, ?)',
+    // Get user from ittoolbox_randevu experts table (single source of truth)
+    const [users] = await randevuPool.execute(
+      'SELECT id, name, email, password_hash, role FROM experts WHERE email = ? AND role IN (?, ?)',
       [email, 'admin', 'superadmin']
     );
 
@@ -48,51 +48,23 @@ router.post('/login', async (req, res) => {
     const user = users[0];
 
     // Compare password with bcrypt
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!user.password_hash) {
+      return res.status(401).json({ error: 'Şifre tanımlanmamış' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Email veya şifre yanlış' });
     }
 
-    // Add/update admin as expert in randevu database using the same ID from ittoolbox
-    // This ensures ID consistency between ittoolbox users and randevu experts
-    // Also sync role from ittoolbox to experts table
-    try {
-      // Use INSERT ... ON DUPLICATE KEY UPDATE to ensure expert exists with same ID and role
-      await randevuPool.execute(
-        `INSERT INTO experts (id, name, email, role) VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email), role = VALUES(role)`,
-        [user.id, user.name, user.email, user.role]
-      );
-    } catch (error) {
-      console.error('Error syncing expert:', error);
-      // Don't fail login if expert sync fails
-    }
-
-    // Get role from experts table (not from ittoolbox)
-    let expertRole = user.role; // fallback to ittoolbox role
-    try {
-      const [experts] = await randevuPool.execute(
-        'SELECT role FROM experts WHERE id = ?',
-        [user.id]
-      );
-      if (experts.length > 0 && experts[0].role) {
-        expertRole = experts[0].role;
-      }
-    } catch (error) {
-      console.error('Error getting expert role:', error);
-      // Use ittoolbox role as fallback
-    }
-
     // Return user info (without password)
-    // expertId is same as id since we use the same ID from ittoolbox
-    // Role comes from experts table
+    // Role comes from experts table (single source of truth)
     res.json({
       id: user.id,
       name: user.name,
       email: user.email,
-      role: expertRole,
-      avatar: user.avatar,
+      role: user.role,
       authenticated: true
     });
   } catch (error) {

@@ -90,10 +90,10 @@ export function AppointmentManagement({ adminUser }: Props) {
     try {
       const response = await fetch(`/api/appointments/${id}/approve`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || 'System'
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         }
       });
 
@@ -138,7 +138,7 @@ export function AppointmentManagement({ adminUser }: Props) {
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || 'System'
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         },
         body: JSON.stringify({ cancellationReason: cancellationReason.trim() })
       });
@@ -185,7 +185,7 @@ export function AppointmentManagement({ adminUser }: Props) {
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
-          'x-user-name': adminUser?.name || 'System'
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
         }
       });
 

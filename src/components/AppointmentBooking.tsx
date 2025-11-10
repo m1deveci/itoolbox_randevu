@@ -148,7 +148,7 @@ export function AppointmentBooking() {
 
     // Generate time slots from availabilities (exact startTime matches)
     const timeSlots: string[] = [];
-    
+
     dayAvailabilities.forEach((avail) => {
       const startTime = avail.start_time.substring(0, 5); // "HH:MM"
       // Only add if not already booked
@@ -158,9 +158,22 @@ export function AppointmentBooking() {
     });
 
     // Sort and remove duplicates
-    const uniqueSlots = [...new Set(timeSlots)].sort();
+    let uniqueSlots = [...new Set(timeSlots)].sort();
+
+    // Filter out past times if selected date is today
+    const todayDate = getTodayDate();
+    if (selectedDate === todayDate) {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Only show times that are greater than current time
+      uniqueSlots = uniqueSlots.filter((slot) => {
+        return slot > currentTime;
+      });
+    }
+
     setAvailableTimes(uniqueSlots);
-    
+
     // Reset selected time if it's no longer available
     if (selectedTime && !uniqueSlots.includes(selectedTime)) {
       setSelectedTime('');

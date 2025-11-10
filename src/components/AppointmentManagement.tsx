@@ -37,12 +37,14 @@ export function AppointmentManagement({ adminUser }: Props) {
   const [searchParams] = useSearchParams();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [experts, setExperts] = useState<Expert[]>([]);
+  const [superadminExperts, setSuperadminExperts] = useState<Expert[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
   const [loading, setLoading] = useState(false);
 
   // Load experts on mount
   useEffect(() => {
     loadExperts();
+    loadSuperadminExperts();
   }, []);
 
   // Check URL params for initial filter
@@ -63,9 +65,20 @@ export function AppointmentManagement({ adminUser }: Props) {
       const response = await fetch('/api/experts');
       if (!response.ok) throw new Error('Failed to fetch experts');
       const data = await response.json();
-      setExperts(data.experts || []);
+      setExperts(data);
     } catch (error) {
       console.error('Error loading experts:', error);
+    }
+  };
+
+  const loadSuperadminExperts = async () => {
+    try {
+      const response = await fetch('/api/experts?role=superadmin');
+      if (!response.ok) throw new Error('Failed to fetch superadmin experts');
+      const data = await response.json();
+      setSuperadminExperts(data);
+    } catch (error) {
+      console.error('Error loading superadmin experts:', error);
     }
   };
 
@@ -265,9 +278,9 @@ export function AppointmentManagement({ adminUser }: Props) {
     const appointment = appointments.find(a => a.id === appointmentId);
     if (!appointment) return;
 
-    // Check availability for each expert
+    // Check availability for each superadmin expert
     const availabilityStatus: { [key: number]: boolean } = {};
-    for (const expert of experts) {
+    for (const expert of superadminExperts) {
       if (expert.id !== appointment.expertId) {
         const isAvailable = await checkExpertAvailability(
           expert.id,
@@ -279,7 +292,7 @@ export function AppointmentManagement({ adminUser }: Props) {
     }
 
     // Create HTML with expert options
-    const htmlContent = experts
+    const htmlContent = superadminExperts
       .filter(e => e.id !== appointment.expertId) // Exclude current expert
       .map(
         expert =>
@@ -305,12 +318,12 @@ export function AppointmentManagement({ adminUser }: Props) {
         <div style="text-align: left; margin: 16px 0;">
           <p><strong>Şu anki uzman:</strong> ${appointment.expertName}</p>
           <p style="margin-bottom: 16px;"><strong>Tarih/Saat:</strong> ${appointment.date} ${appointment.time}</p>
-          <p style="margin-bottom: 8px;"><strong>Yeni uzman seçin:</strong></p>
+          <p style="margin-bottom: 8px;"><strong>Yeni uzman seçin (Superadminler):</strong></p>
           ${htmlContent}
         </div>
       `,
       input: 'radio',
-      inputOptions: experts
+      inputOptions: superadminExperts
         .filter(e => e.id !== appointment.expertId)
         .reduce(
           (acc, expert) => {
@@ -328,11 +341,11 @@ export function AppointmentManagement({ adminUser }: Props) {
       confirmButtonColor: '#3b82f6',
       inputValidator: (value) => {
         if (!value) {
-          return 'Lütfen yeni bir uzman seçiniz!';
+          return 'Lütfen yeni bir superadmin seçiniz!';
         }
         const selectedId = parseInt(value);
         if (!availabilityStatus[selectedId]) {
-          return 'Seçilen uzman bu tarih/saatte müsait değildir!';
+          return 'Seçilen superadmin bu tarih/saatte müsait değildir!';
         }
       }
     });

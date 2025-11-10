@@ -16,12 +16,20 @@ const ittoolboxPool = mysql.createPool({
 });
 
 module.exports = (pool) => {
-  // GET /api/experts - Get all experts
+  // GET /api/experts - Get all experts (optionally filtered by role)
   router.get('/', async (req, res) => {
     try {
-      const [experts] = await pool.execute(
-        'SELECT id, name, email, role, created_at FROM experts ORDER BY name'
-      );
+      const { role } = req.query;
+      let query = 'SELECT id, name, email, role, created_at FROM experts';
+      const params = [];
+
+      if (role) {
+        query += ' WHERE role = ?';
+        params.push(role);
+      }
+
+      query += ' ORDER BY name';
+      const [experts] = await pool.execute(query, params);
       res.json(experts);
     } catch (error) {
       console.error('Error fetching experts:', error);

@@ -56,6 +56,9 @@ export function AppointmentBooking() {
   const [currentStep, setCurrentStep] = useState(1);
   const [showBackupLinks, setShowBackupLinks] = useState(false);
   const [minimumBookingHours, setMinimumBookingHours] = useState(3);
+  const [lockSessionId] = useState(() => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [lockTimeRemaining, setLockTimeRemaining] = useState(0);
+  const [previousLockSlot, setPreviousLockSlot] = useState<{ expert: string; date: string; time: string } | null>(null);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -86,6 +89,55 @@ export function AppointmentBooking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedExpert, selectedDate]);
 
+  // Handle time slot locking (90 seconds reservation)
+  useEffect(() => {
+    // Release previous lock if time changed
+    if (previousLockSlot && !(previousLockSlot.expert === selectedExpert && previousLockSlot.date === selectedDate && previousLockSlot.time === selectedTime)) {
+      releaseLock(previousLockSlot.expert, previousLockSlot.date, previousLockSlot.time);
+    }
+
+    // Create new lock if time is selected
+    if (selectedTime && selectedExpert && selectedDate) {
+      createLock();
+      setLockTimeRemaining(90);
+    } else {
+      setLockTimeRemaining(0);
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTime]);
+
+  // Countdown timer for lock
+  useEffect(() => {
+    if (lockTimeRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      setLockTimeRemaining(prev => {
+        if (prev <= 1) {
+          // Time expired, release lock
+          if (selectedExpert && selectedDate && selectedTime) {
+            releaseLock(selectedExpert, selectedDate, selectedTime);
+            setSelectedTime('');
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lockTimeRemaining, selectedExpert, selectedDate, selectedTime]);
+
+  // Cleanup lock on component unmount
+  useEffect(() => {
+    return () => {
+      if (selectedExpert && selectedDate && selectedTime) {
+        releaseLock(selectedExpert, selectedDate, selectedTime);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadExperts = async () => {
     try {
       const response = await fetch('/api/experts');
@@ -112,6 +164,47 @@ export function AppointmentBooking() {
       console.error('Error loading minimum booking hours:', error);
       // Default to 3 on error
       setMinimumBookingHours(3);
+    }
+  };
+
+  const createLock = async () => {
+    try {
+      const response = await fetch('/api/appointments/lock/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expertId: parseInt(selectedExpert),
+          appointmentDate: selectedDate,
+          appointmentTime: selectedTime,
+          sessionId: lockSessionId
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Error creating lock:', error);
+      }
+
+      // Store current slot info for later cleanup
+      const expertName = experts.find((e: any) => e.id === parseInt(selectedExpert))?.name || selectedExpert;
+      setPreviousLockSlot({
+        expert: selectedExpert,
+        date: selectedDate,
+        time: selectedTime
+      });
+    } catch (error) {
+      console.error('Error creating lock:', error);
+    }
+  };
+
+  const releaseLock = async (expert: string, date: string, time: string) => {
+    try {
+      await fetch(`/api/appointments/lock/release/${lockSessionId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error releasing lock:', error);
     }
   };
 
@@ -279,6 +372,22 @@ export function AppointmentBooking() {
 
     setLoading(true);
     try {
+      // Check if the time slot is still available (not locked by someone else)
+      const lockCheckResponse = await fetch(
+        `/api/appointments/lock/check?expertId=${selectedExpert}&date=${selectedDate}&time=${selectedTime}&currentSessionId=${lockSessionId}`
+      );
+
+      if (!lockCheckResponse.ok) {
+        const lockCheckData = await lockCheckResponse.json();
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Randevu Oluşturulamadı',
+          text: lockCheckData.error || 'Başka bir kullanıcı aynı saati seçmiş. Lütfen başka bir saat seçiniz.',
+          confirmButtonColor: '#f59e0b'
+        });
+        return;
+      }
+
       const response = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -324,6 +433,11 @@ export function AppointmentBooking() {
         confirmButtonColor: '#3b82f6',
         confirmButtonText: 'Tamam'
       });
+
+      // Release lock on success
+      if (selectedExpert && selectedDate && selectedTime) {
+        await releaseLock(selectedExpert, selectedDate, selectedTime);
+      }
 
       setSelectedExpert('');
       setSelectedDate('');
@@ -722,6 +836,29 @@ export function AppointmentBooking() {
                     <p className="mt-2 text-sm text-red-600">
                       ⚠️ Seçilen IT Uzmanı bu tarihte müsaitlik girmemiş veya tüm saatler dolu.
                     </p>
+                  )}
+
+                  {/* Lock Countdown Info */}
+                  {selectedTime && lockTimeRemaining > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-blue-900">
+                            Seçilen Tarih ve Saat Korunuyor
+                          </p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            <strong>{selectedDate}</strong> - <strong>{selectedTime}</strong>
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 text-center">
+                          <div className="text-2xl font-bold text-blue-600">{lockTimeRemaining}</div>
+                          <p className="text-xs text-blue-600">saniye</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-blue-600 mt-2">
+                        💡 Bu saati 90 saniye içinde rezerve edebilirsiniz. Sonrasında serbest kalacaktır.
+                      </p>
+                    </div>
                   )}
                 </div>
 

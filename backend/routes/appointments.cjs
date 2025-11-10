@@ -439,5 +439,96 @@ module.exports = (pool) => {
     }
   });
 
+  // POST /api/appointments/lock - Create a temporary lock for a time slot
+  router.post('/lock/create', async (req, res) => {
+    try {
+      const { expertId, appointmentDate, appointmentTime, sessionId } = req.body;
+
+      if (!expertId || !appointmentDate || !appointmentTime || !sessionId) {
+        return res.status(400).json({ error: 'Expert ID, date, time, and session ID are required' });
+      }
+
+      // Calculate expiration time (90 seconds from now)
+      const expiresAt = new Date(Date.now() + 90 * 1000);
+
+      // Create or update the lock (if session already has a lock, update it)
+      const [result] = await pool.execute(
+        `INSERT INTO appointment_locks (expert_id, appointment_date, appointment_time, session_id, created_at, expires_at)
+         VALUES (?, ?, ?, ?, NOW(), ?)
+         ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at), created_at = NOW()`,
+        [expertId, appointmentDate, appointmentTime, sessionId, expiresAt]
+      );
+
+      res.status(201).json({
+        lockId: result.insertId,
+        expiresAt: expiresAt.toISOString(),
+        message: 'Time slot locked for 90 seconds'
+      });
+    } catch (error) {
+      console.error('Error creating lock:', error);
+      res.status(500).json({ error: 'Failed to create lock' });
+    }
+  });
+
+  // DELETE /api/appointments/lock/:sessionId - Release lock
+  router.delete('/lock/release/:sessionId', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+
+      const [result] = await pool.execute(
+        'DELETE FROM appointment_locks WHERE session_id = ?',
+        [sessionId]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Lock not found' });
+      }
+
+      res.json({ message: 'Lock released successfully' });
+    } catch (error) {
+      console.error('Error releasing lock:', error);
+      res.status(500).json({ error: 'Failed to release lock' });
+    }
+  });
+
+  // GET /api/appointments/check-lock - Check if time slot is locked
+  router.get('/lock/check', async (req, res) => {
+    try {
+      const { expertId, date, time, currentSessionId } = req.query;
+
+      if (!expertId || !date || !time) {
+        return res.status(400).json({ error: 'Expert ID, date, and time are required' });
+      }
+
+      // Clean up expired locks
+      await pool.execute(
+        'DELETE FROM appointment_locks WHERE expires_at < NOW()'
+      );
+
+      // Check for active locks (excluding current session)
+      const [locks] = await pool.execute(
+        `SELECT session_id FROM appointment_locks
+         WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
+         AND session_id != ? AND expires_at > NOW()`,
+        [expertId, date, time, currentSessionId || '']
+      );
+
+      if (locks.length > 0) {
+        return res.status(409).json({
+          error: 'Bu tarih ve saat başka bir kullanıcı tarafından seçilmiş. Lütfen başka bir saat seçiniz.',
+          locked: true
+        });
+      }
+
+      res.json({
+        locked: false,
+        message: 'Time slot is available'
+      });
+    } catch (error) {
+      console.error('Error checking lock:', error);
+      res.status(500).json({ error: 'Failed to check lock' });
+    }
+  });
+
   return router;
 };

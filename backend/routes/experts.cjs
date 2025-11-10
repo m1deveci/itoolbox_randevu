@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
 
 // Create connection pool for ittoolbox database
 const ittoolboxPool = mysql.createPool({
@@ -114,6 +115,45 @@ module.exports = (pool) => {
       }
       console.error('Error updating expert:', error);
       res.status(500).json({ error: 'Failed to update expert' });
+    }
+  });
+
+  // POST /api/experts/:id/reset-password - Reset expert password
+  router.post('/:id/reset-password', async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Get expert details
+      const [experts] = await pool.execute(
+        'SELECT id, name, email FROM experts WHERE id = ?',
+        [id]
+      );
+
+      if (experts.length === 0) {
+        return res.status(404).json({ error: 'Expert not found' });
+      }
+
+      const expert = experts[0];
+
+      // Generate temporary password
+      const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`;
+      const hashedPassword = await bcrypt.hash(tempPassword, 12);
+
+      // Update password
+      await pool.execute(
+        'UPDATE experts SET password_hash = ? WHERE id = ?',
+        [hashedPassword, id]
+      );
+
+      res.json({
+        message: 'Password reset successfully',
+        newPassword: tempPassword,
+        email: expert.email,
+        name: expert.name
+      });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({ error: 'Failed to reset password' });
     }
   });
 

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, Plus, Trash2, Download, AlertCircle, CheckCircle, Edit2, Lock } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 interface Expert {
   id: string;
   name: string;
   email: string;
+  role?: string;
 }
 
 export function ExpertManagement() {
@@ -12,6 +14,7 @@ export function ExpertManagement() {
   const [newExpert, setNewExpert] = useState({ name: '', email: '' });
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [editingExpert, setEditingExpert] = useState<Expert | null>(null);
 
   useEffect(() => {
     loadExperts();
@@ -104,6 +107,83 @@ export function ExpertManagement() {
       });
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleEditExpert = async (expert: Expert) => {
+    const { value: formValues } = await Swal.fire({
+      title: 'Uzman Düzenle',
+      html: `
+        <input id="swal-name" class="swal2-input" placeholder="Ad" value="${expert.name}">
+        <input id="swal-email" class="swal2-input" placeholder="Email" value="${expert.email}">
+      `,
+      confirmButtonText: 'Kaydet',
+      cancelButtonText: 'İptal',
+      showCancelButton: true,
+      preConfirm: () => {
+        const name = (document.getElementById('swal-name') as HTMLInputElement)?.value;
+        const email = (document.getElementById('swal-email') as HTMLInputElement)?.value;
+        if (!name || !email) {
+          Swal.showValidationMessage('Lütfen tüm alanları doldurunuz');
+          return false;
+        }
+        return { name, email };
+      }
+    });
+
+    if (!formValues) return;
+
+    try {
+      const response = await fetch(`/api/experts/${expert.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formValues)
+      });
+
+      if (!response.ok) throw new Error('Failed to update expert');
+
+      await loadExperts();
+      await Swal.fire('Başarılı', 'Uzman başarıyla güncellendi', 'success');
+    } catch (error) {
+      console.error('Error updating expert:', error);
+      await Swal.fire('Hata', 'Uzman güncellenirken hata oluştu', 'error');
+    }
+  };
+
+  const handleResetPassword = async (expert: Expert) => {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Parola Sıfırlama',
+      text: `${expert.name} kullanıcısının parolasını sıfırlamak istediğinize emin misiniz?`,
+      icon: 'warning',
+      confirmButtonText: 'Evet, Sıfırla',
+      cancelButtonText: 'İptal',
+      showCancelButton: true
+    });
+
+    if (!isConfirmed) return;
+
+    try {
+      const response = await fetch(`/api/experts/${expert.id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || 'Failed to reset password');
+
+      await Swal.fire({
+        title: 'Başarılı',
+        html: `<p>Parola başarıyla sıfırlandı</p>
+               <div class="bg-blue-50 p-3 rounded mt-3">
+                 <p class="text-sm font-mono text-center">${data.newPassword}</p>
+               </div>
+               <p class="text-xs text-gray-600 mt-2">Geçici parola kullanıcıya gönderildi</p>`,
+        icon: 'success'
+      });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      await Swal.fire('Hata', 'Parola sıfırlanırken hata oluştu', 'error');
     }
   };
 
@@ -201,12 +281,29 @@ export function ExpertManagement() {
                     <td className="px-4 lg:px-6 py-3 text-sm">{expert.name}</td>
                     <td className="px-4 lg:px-6 py-3 text-sm font-mono text-gray-600">{expert.email}</td>
                     <td className="px-4 lg:px-6 py-3">
-                      <button
-                        onClick={() => handleDeleteExpert(expert.id)}
-                        className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditExpert(expert)}
+                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded transition"
+                          title="Düzenle"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleResetPassword(expert)}
+                          className="text-orange-600 hover:text-orange-800 hover:bg-orange-50 p-2 rounded transition"
+                          title="Parola Sıfırla"
+                        >
+                          <Lock className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteExpert(expert.id)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
+                          title="Sil"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -225,16 +322,36 @@ export function ExpertManagement() {
         ) : (
           experts.map((expert) => (
             <div key={expert.id} className="bg-white rounded-lg shadow p-4">
-              <div className="flex justify-between items-start gap-3">
+              <div className="flex justify-between items-start gap-3 mb-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-sm text-gray-900">{expert.name}</p>
                   <p className="text-xs text-gray-600 truncate font-mono">{expert.email}</p>
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleEditExpert(expert)}
+                  className="flex-1 flex items-center justify-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded transition text-xs font-medium"
+                  title="Düzenle"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  <span>Düzenle</span>
+                </button>
+                <button
+                  onClick={() => handleResetPassword(expert)}
+                  className="flex-1 flex items-center justify-center gap-2 text-orange-600 hover:text-orange-800 hover:bg-orange-50 p-2 rounded transition text-xs font-medium"
+                  title="Parola Sıfırla"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Parola</span>
+                </button>
                 <button
                   onClick={() => handleDeleteExpert(expert.id)}
-                  className="flex-shrink-0 text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
+                  className="flex-1 flex items-center justify-center gap-2 text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition text-xs font-medium"
+                  title="Sil"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3 h-3" />
+                  <span>Sil</span>
                 </button>
               </div>
             </div>

@@ -85,7 +85,7 @@ module.exports = (pool) => {
   // PUT /api/experts/:id - Update expert
   router.put('/:id', async (req, res) => {
     try {
-      const { name, email } = req.body;
+      const { name, email, role } = req.body;
 
       if (!name || !email) {
         return res.status(400).json({ error: 'Name and email are required' });
@@ -95,9 +95,12 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Invalid email format' });
       }
 
+      const validRoles = ['admin', 'superadmin'];
+      const finalRole = role && validRoles.includes(role) ? role : 'admin';
+
       const [result] = await pool.execute(
-        'UPDATE experts SET name = ?, email = ? WHERE id = ?',
-        [name, email, req.params.id]
+        'UPDATE experts SET name = ?, email = ?, role = ? WHERE id = ?',
+        [name, email, finalRole, req.params.id]
       );
 
       if (result.affectedRows === 0) {
@@ -107,7 +110,8 @@ module.exports = (pool) => {
       res.json({
         id: req.params.id,
         name,
-        email
+        email,
+        role: finalRole
       });
     } catch (error) {
       if (error.code === 'ER_DUP_ENTRY') {

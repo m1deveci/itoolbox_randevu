@@ -25,7 +25,7 @@ export function ExpertManagement() {
       const response = await fetch('/api/experts');
       if (!response.ok) throw new Error('Failed to fetch experts');
       const data = await response.json();
-      setExperts(data.map((e: any) => ({ id: e.id.toString(), name: e.name, email: e.email })));
+      setExperts(data.map((e: any) => ({ id: e.id.toString(), name: e.name, email: e.email, role: e.role })));
     } catch (error) {
       console.error('Error loading experts:', error);
     }
@@ -116,6 +116,10 @@ export function ExpertManagement() {
       html: `
         <input id="swal-name" class="swal2-input" placeholder="Ad" value="${expert.name}">
         <input id="swal-email" class="swal2-input" placeholder="Email" value="${expert.email}">
+        <select id="swal-role" class="swal2-input" style="height: auto;">
+          <option value="admin" ${expert.role === 'admin' ? 'selected' : ''}>Admin</option>
+          <option value="superadmin" ${expert.role === 'superadmin' ? 'selected' : ''}>Superadmin</option>
+        </select>
       `,
       confirmButtonText: 'Kaydet',
       cancelButtonText: 'İptal',
@@ -123,11 +127,12 @@ export function ExpertManagement() {
       preConfirm: () => {
         const name = (document.getElementById('swal-name') as HTMLInputElement)?.value;
         const email = (document.getElementById('swal-email') as HTMLInputElement)?.value;
-        if (!name || !email) {
+        const role = (document.getElementById('swal-role') as HTMLSelectElement)?.value;
+        if (!name || !email || !role) {
           Swal.showValidationMessage('Lütfen tüm alanları doldurunuz');
           return false;
         }
-        return { name, email };
+        return { name, email, role };
       }
     });
 

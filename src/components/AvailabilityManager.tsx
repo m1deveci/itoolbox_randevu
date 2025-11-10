@@ -177,12 +177,18 @@ export function AvailabilityManager({ adminUser }: Props) {
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
-      const mapped = data.map((a: any) => ({
-        id: a.id.toString(),
-        availabilityDate: a.availability_date,
-        startTime: a.start_time ? a.start_time.substring(0, 5) : '', // "HH:MM" format
-        endTime: a.end_time ? a.end_time.substring(0, 5) : '' // "HH:MM" format
-      }));
+      const mapped = data.map((a: any) => {
+        // Parse ISO date string and extract just the date part (YYYY-MM-DD)
+        const dateObj = new Date(a.availability_date);
+        const dateString = dateObj.toISOString().split('T')[0];
+
+        return {
+          id: a.id.toString(),
+          availabilityDate: dateString,
+          startTime: a.start_time ? a.start_time.substring(0, 5) : '', // "HH:MM" format
+          endTime: a.end_time ? a.end_time.substring(0, 5) : '' // "HH:MM" format
+        };
+      });
       setAvailabilities(mapped);
       console.log('Availabilities loaded:', mapped.length, 'items for expert', expertId);
     } catch (error) {
@@ -287,12 +293,21 @@ export function AvailabilityManager({ adminUser }: Props) {
     const endTime = `${String(hours).padStart(2, '0')}:59`;
 
     // Check if this time slot already exists for this date
+    console.log('Debug - Adding time slot:', {
+      selectedDate,
+      timeSlot,
+      expertId: selectedExpertId || adminUser?.id,
+      availabilitiesCount: availabilities.length,
+      availabilitiesForDate: availabilities.filter(a => a.availabilityDate === selectedDate).length
+    });
+
     const existing = availabilities.find(
       a => a.availabilityDate === selectedDate &&
       a.startTime === timeSlot
     );
 
     if (existing) {
+      console.log('Found existing availability:', existing);
       // If exists but with different endTime, update it
       if (existing.endTime !== endTime) {
         const result = await Swal.fire({

@@ -2,10 +2,43 @@ const express = require('express');
 const router = express.Router();
 
 module.exports = (pool) => {
-  // GET /api/availability - Get all availabilities
+  // GET /api/availability - Get availabilities or check specific time slot availability
   router.get('/', async (req, res) => {
     try {
       const expertId = req.query.expertId;
+      const date = req.query.date;
+      const time = req.query.time;
+
+      // If date and time are provided, check if expert is available for that specific time
+      if (expertId && date && time) {
+        const timeStr = time.substring(0, 5); // Normalize to HH:MM format
+
+        // Check if there's an availability record for this exact time slot
+        const [availabilities] = await pool.execute(
+          `SELECT id FROM availability
+           WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
+          [expertId, date, timeStr]
+        );
+
+        // Check if there's an appointment at that time
+        const [appointments] = await pool.execute(
+          `SELECT id FROM appointments
+           WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
+           AND status != 'cancelled'`,
+          [expertId, date, timeStr]
+        );
+
+        const isAvailable = availabilities.length > 0 && appointments.length === 0;
+
+        return res.json({
+          isAvailable,
+          expertId,
+          date,
+          time: timeStr
+        });
+      }
+
+      // Otherwise, get all availabilities (filtered by expertId if provided)
       let query = `
         SELECT a.id, a.expert_id, a.availability_date, a.start_time, a.end_time,
                e.name as expert_name, a.created_at

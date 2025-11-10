@@ -505,12 +505,307 @@ IT Randevu Sistemi
   });
 }
 
+/**
+ * Send appointment reassignment notification to old expert
+ */
+async function sendReassignmentNotificationToOldExpert(pool, appointment, oldExpert, newExpert) {
+  try {
+    // Validate and parse appointment date
+    if (!appointment.appointment_date) {
+      console.error('Appointment date is missing');
+      return false;
+    }
+
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    // Check if date is valid
+    if (isNaN(appointmentDate.getTime())) {
+      console.error('Invalid appointment date:', appointment.appointment_date);
+      return false;
+    }
+
+    const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `Randevu Ataması Değiştirildi - ${formattedDate}`;
+    const text = `
+Merhaba ${oldExpert.name},
+
+Sizin için önemli bir bildirim:
+
+Randevu talebinizin ataması başka bir IT Uzmanına devredilmiştir.
+
+Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- Müşteri: ${appointment.user_name}
+- Ticket No: ${appointment.ticket_no}
+- Yeni Atanan Uzman: ${newExpert.name}
+
+Bu randevu artık sizin sorumluluğunuzda değildir.
+
+İyi çalışmalar,
+IT Randevu Sistemi
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #f59e0b;">Randevu Ataması Değiştirildi</h2>
+        <p>Merhaba <strong>${oldExpert.name}</strong>,</p>
+        <p>Sizin için önemli bir bildirim:</p>
+
+        <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <h3 style="margin-top: 0; color: #1f2937;">Randevu Taşıma Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+          <p style="margin-bottom: 0;"><strong>Yeni Atanan Uzman:</strong> <span style="color: #10b981; font-weight: bold;">${newExpert.name}</span></p>
+        </div>
+
+        <p style="color: #6b7280; padding: 15px; background-color: #f3f4f6; border-radius: 8px;">
+          Bu randevu artık sizin sorumluluğunuzda değildir.
+        </p>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi çalışmalar,<br>
+          IT Randevu Sistemi
+        </p>
+      </div>
+    `;
+
+    return await sendEmail(pool, {
+      to: oldExpert.email,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending reassignment notification to old expert:', error);
+    return false;
+  }
+}
+
+/**
+ * Send appointment reassignment notification to new expert
+ */
+async function sendReassignmentNotificationToNewExpert(pool, appointment, newExpert, oldExpert) {
+  try {
+    // Validate and parse appointment date
+    if (!appointment.appointment_date) {
+      console.error('Appointment date is missing');
+      return false;
+    }
+
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    // Check if date is valid
+    if (isNaN(appointmentDate.getTime())) {
+      console.error('Invalid appointment date:', appointment.appointment_date);
+      return false;
+    }
+
+    const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `Yeni Randevu Ataması - ${formattedDate}`;
+    const text = `
+Merhaba ${newExpert.name},
+
+Size yeni bir randevu ataması yapılmıştır:
+
+Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- Müşteri: ${appointment.user_name}
+- E-posta: ${appointment.user_email}
+- Telefon: ${appointment.user_phone}
+- Ticket No: ${appointment.ticket_no}
+- Önceki Atanan Uzman: ${oldExpert.name}
+
+Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz.
+
+İyi çalışmalar,
+IT Randevu Sistemi
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #3b82f6;">Yeni Randevu Ataması</h2>
+        <p>Merhaba <strong>${newExpert.name}</strong>,</p>
+        <p>Size yeni bir randevu ataması yapılmıştır:</p>
+
+        <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+          <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>Müşteri:</strong> ${appointment.user_name}</p>
+          <p><strong>E-posta:</strong> ${appointment.user_email}</p>
+          <p><strong>Telefon:</strong> ${appointment.user_phone}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+          <p style="margin-bottom: 0;"><strong>Önceki Atanan:</strong> ${oldExpert.name}</p>
+        </div>
+
+        <p style="padding: 15px; background-color: #f0f9ff; border-radius: 8px; color: #1e40af; font-size: 13px;">
+          <strong>Lütfen Dikkat:</strong> Bu randevu önceden başka bir uzman tarafından alınmıştı. Lütfen taşıma nedenini göz önünde bulundurunuz.
+        </p>
+
+        <p>Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz. Randevuyu onayladığında, müşteriye ve önceki atanan uzmanına bildirim gönderilecektir.</p>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi çalışmalar,<br>
+          IT Randevu Sistemi
+        </p>
+      </div>
+    `;
+
+    return await sendEmail(pool, {
+      to: newExpert.email,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending reassignment notification to new expert:', error);
+    return false;
+  }
+}
+
+/**
+ * Send appointment reassignment notification to user
+ */
+async function sendReassignmentNotificationToUser(pool, appointment, oldExpert, newExpert) {
+  try {
+    // Validate and parse appointment date
+    if (!appointment.appointment_date) {
+      console.error('Appointment date is missing');
+      return false;
+    }
+
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    // Check if date is valid
+    if (isNaN(appointmentDate.getTime())) {
+      console.error('Invalid appointment date:', appointment.appointment_date);
+      return false;
+    }
+
+    const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `Randevunuzun Atanan Uzmanı Değişti - ${formattedDate}`;
+    const text = `
+Merhaba ${appointment.user_name},
+
+Randevu talebinizin atanan IT Uzmanı değişmiştir.
+
+Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- Eski Atanan Uzman: ${oldExpert.name}
+- Yeni Atanan Uzman: ${newExpert.name}
+- Ticket No: ${appointment.ticket_no}
+
+Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.
+
+Sorularınız varsa, lütfen bizimle iletişim kurunuz.
+
+İyi günler,
+IT Randevu Sistemi
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #6366f1;">Randevunuzun Atanan Uzmanı Değişti</h2>
+        <p>Merhaba <strong>${appointment.user_name}</strong>,</p>
+        <p>Randevu talebinizin atanan IT Uzmanı değişmiştir.</p>
+
+        <div style="background-color: #e0e7ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6366f1;">
+          <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <tr>
+              <td style="padding: 8px; background-color: #f3f4f6; border-right: 1px solid #d1d5db;">
+                <strong style="color: #ef4444;">Eski Uzman:</strong>
+              </td>
+              <td style="padding: 8px; background-color: #fef2f2;">
+                ${oldExpert.name}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; background-color: #f3f4f6; border-right: 1px solid #d1d5db;">
+                <strong style="color: #10b981;">Yeni Uzman:</strong>
+              </td>
+              <td style="padding: 8px; background-color: #f0fdf4;">
+                ${newExpert.name}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="padding: 15px; background-color: #f0f9ff; border-radius: 8px; color: #1e40af;">
+          <strong>ℹ️ Bilgi:</strong> Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.
+        </p>
+
+        <p>Sorularınız varsa, lütfen bizimle iletişim kurunuz.</p>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi günler,<br>
+          IT Randevu Sistemi
+        </p>
+      </div>
+    `;
+
+    return await sendEmail(pool, {
+      to: appointment.user_email,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending reassignment notification to user:', error);
+    return false;
+  }
+}
+
 module.exports = {
   sendEmail,
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
   sendAppointmentApprovalToExpert,
-  sendAppointmentCancellationToUser
+  sendAppointmentCancellationToUser,
+  sendReassignmentNotificationToOldExpert,
+  sendReassignmentNotificationToNewExpert,
+  sendReassignmentNotificationToUser
 };
 
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface Appointment {
@@ -135,7 +135,7 @@ export function AppointmentManagement({ adminUser }: Props) {
     try {
       const response = await fetch(`/api/appointments/${id}/cancel`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-id': adminUser?.id?.toString() || '',
           'x-user-name': adminUser?.name || 'System'
@@ -144,7 +144,7 @@ export function AppointmentManagement({ adminUser }: Props) {
       });
 
       if (!response.ok) throw new Error('Failed to cancel appointment');
-      
+
       await Swal.fire({
         icon: 'success',
         title: 'Randevu İptal Edildi',
@@ -159,6 +159,52 @@ export function AppointmentManagement({ adminUser }: Props) {
         icon: 'error',
         title: 'Hata',
         text: 'Randevu iptal edilirken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const confirmed = await Swal.fire({
+      title: 'Randevuyu Sil',
+      text: 'Bu randevuyu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Evet, Sil',
+      cancelButtonText: 'Vazgeç',
+      confirmButtonColor: '#ef4444'
+    });
+
+    if (!confirmed.isConfirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || 'System'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete appointment');
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Randevu Silindi',
+        text: 'Randevu başarıyla silindi.',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      setAppointments(appointments.filter(a => a.id !== id));
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Randevu silinirken hata oluştu',
         confirmButtonColor: '#ef4444'
       });
     }
@@ -273,6 +319,16 @@ export function AppointmentManagement({ adminUser }: Props) {
                             </button>
                           </>
                         )}
+                        {apt.status === 'cancelled' && (
+                          <button
+                            onClick={() => handleDelete(apt.id)}
+                            className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-semibold hover:bg-red-50 px-2 py-1 rounded inline-flex items-center gap-1"
+                            title="Sil"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span className="hidden sm:inline">Sil</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -321,6 +377,18 @@ export function AppointmentManagement({ adminUser }: Props) {
                       className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold py-2 rounded transition"
                     >
                       Red
+                    </button>
+                  </div>
+                )}
+
+                {apt.status === 'cancelled' && (
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => handleDelete(apt.id)}
+                      className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold py-2 rounded transition inline-flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Sil
                     </button>
                   </div>
                 )}

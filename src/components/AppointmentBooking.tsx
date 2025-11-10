@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 interface Availability {
   id: number;
   expert_id: number;
-  day_of_week: number;
+  availability_date: string;
   start_time: string;
   end_time: string;
 }
@@ -238,15 +238,9 @@ export function AppointmentBooking() {
   const calculateAvailableTimes = (availabilities: Availability[], appointments: any[]) => {
     if (!selectedDate) return;
 
-    // Get day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
-    const date = new Date(selectedDate + 'T00:00:00');
-    const jsDayOfWeek = date.getDay(); // 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
-    // Convert to our format: 0=Pazartesi, 1=Salı, ..., 6=Pazar
-    const dayOfWeek = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
-
-    // Filter availabilities for this day of week
+    // Filter availabilities for this specific date
     const dayAvailabilities = availabilities.filter(
-      (avail) => avail.day_of_week === dayOfWeek
+      (avail) => avail.availability_date === selectedDate
     );
 
     if (dayAvailabilities.length === 0) {
@@ -537,43 +531,52 @@ export function AppointmentBooking() {
             />
           </button>
 
-          {/* Accordion Content */}
-          {showBackupLinks && (
-            <div className="mt-2 bg-white border-2 border-blue-200 border-t-0 rounded-b-lg p-4 sm:p-6 animate-in fade-in duration-200">
-              <p className="text-xs sm:text-sm text-gray-600 mb-4">
-                Randevu öncesinde verilerinizi yedeklemeniz önerilir. Aşağıdaki bağlantılardan yedekleme işlemlerinizi kolayca yapabilirsiniz:
-              </p>
-              <div className="space-y-2">
-                <a
-                  href="https://youtube.com/shorts/V94yOBj7aJY?si=vNVkPGDzeLHMC3ca"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
-                >
-                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                  <span>iCloud Yedeği Alma</span>
-                </a>
-                <a
-                  href="https://www.youtube.com/watch?v=6v2v0Zkrves"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
-                >
-                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                  <span>iPhone WhatsApp Yedekleme</span>
-                </a>
-                <a
-                  href="https://www.youtube.com/watch?v=9J29mDVdpNo"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
-                >
-                  <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                  <span>Samsung WhatsApp Yedekleme</span>
-                </a>
-              </div>
-            </div>
-          )}
+       {/* Accordion Content */}
+{showBackupLinks && (
+  <div className="mt-2 bg-white border-2 border-blue-200 border-t-0 rounded-b-lg p-4 sm:p-6 animate-in fade-in duration-200">
+    <p className="text-xs sm:text-sm text-gray-600 mb-4">
+      Randevu öncesinde verilerinizi yedeklemeniz önerilir. 
+      Aşağıdaki bağlantılardan cihazınıza uygun resmi üretici makalelerini inceleyebilirsiniz:
+    </p>
+    <div className="space-y-2">
+
+      {/* Apple iCloud Yedeği */}
+      <a
+        href="https://support.apple.com/tr-tr/HT207428"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+      >
+        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+        <span>Apple Resmî Makalesi: iCloud ile iPhone Yedekleme</span>
+      </a>
+
+      {/* WhatsApp iPhone Yedekleme */}
+      <a
+        href="https://faq.whatsapp.com/iphone/chats/how-to-back-up-your-chat-history/?lang=tr"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+      >
+        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+        <span>WhatsApp Resmî Makalesi: iPhone'da Sohbet Yedeği Alma</span>
+      </a>
+
+      {/* Samsung Yedekleme */}
+      <a
+        href="https://www.samsung.com/tr/support/apps-services/how-to-back-up-data-on-your-galaxy-phone/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-50"
+      >
+        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+        <span>Samsung Resmî Makalesi: Galaxy Telefonda Veri Yedekleme</span>
+      </a>
+
+    </div>
+  </div>
+)}
+
         </div>
 
         {/* Booking Section */}

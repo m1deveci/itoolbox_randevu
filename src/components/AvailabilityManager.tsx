@@ -35,6 +35,12 @@ const TIME_SLOTS = [
   '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00'
 ];
 
+interface Expert {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export function AvailabilityManager({ adminUser }: Props) {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -45,6 +51,8 @@ export function AvailabilityManager({ adminUser }: Props) {
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [showAppointmentsModal, setShowAppointmentsModal] = useState(false);
   const [selectedDateAppointments, setSelectedDateAppointments] = useState<Appointment[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [selectedExpertId, setSelectedExpertId] = useState<number | null>(null);
 
   const dayNames = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
 
@@ -65,15 +73,32 @@ export function AvailabilityManager({ adminUser }: Props) {
     setSelectedDate(dateStr);
     setCurrentWeekStart(getWeekStart(initialDate));
     
-    loadAvailabilities();
-  }, []);
+    // Load experts if superadmin
+    if (adminUser?.role === 'superadmin') {
+      loadExperts();
+    } else {
+      // Set selected expert to current user if not superadmin
+      setSelectedExpertId(adminUser?.id || null);
+      loadAvailabilities();
+    }
+  }, [adminUser]);
+
+  useEffect(() => {
+    const expertId = selectedExpertId || adminUser?.id;
+    if (expertId) {
+      loadAvailabilities();
+    }
+  }, [selectedExpertId, adminUser]);
 
   useEffect(() => {
     if (selectedDate) {
-      loadAppointmentsForDate(selectedDate);
-      loadTimeSlotsForDate(selectedDate);
+      const expertId = selectedExpertId || adminUser?.id;
+      if (expertId) {
+        loadAppointmentsForDate(selectedDate);
+        loadTimeSlotsForDate(selectedDate);
+      }
     }
-  }, [selectedDate, availabilities]);
+  }, [selectedDate, availabilities, selectedExpertId, adminUser]);
 
   const getWeekStart = (date: Date): Date => {
     const d = new Date(date);
@@ -119,31 +144,47 @@ export function AvailabilityManager({ adminUser }: Props) {
     return day === 0 ? 6 : day - 1; // Monday = 0, Sunday = 6
   };
 
+  const loadExperts = async () => {
+    try {
+      const response = await fetch('/api/experts');
+      if (!response.ok) throw new Error('Failed to fetch experts');
+      const data = await response.json();
+      setExperts(data);
+      // Set first expert as default if none selected
+      if (data.length > 0 && !selectedExpertId) {
+        setSelectedExpertId(data[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading experts:', error);
+    }
+  };
+
   const loadAvailabilities = async () => {
     try {
-      if (!adminUser) return;
-      const response = await fetch(`/api/availability?expertId=${adminUser.id}`);
+      const expertId = selectedExpertId || adminUser?.id;
+      if (!expertId) return;
+      const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
-      setAvailabilities(
-        data.map((a: any) => ({
-          id: a.id.toString(),
-          dayOfWeek: a.day_of_week,
-          startTime: a.start_time,
-          endTime: a.end_time
-        }))
-      );
+      const mapped = data.map((a: any) => ({
+        id: a.id.toString(),
+        dayOfWeek: a.day_of_week,
+        startTime: a.start_time.substring(0, 5), // "HH:MM" format
+        endTime: a.end_time.substring(0, 5) // "HH:MM" format
+      }));
+      setAvailabilities(mapped);
     } catch (error) {
       console.error('Error loading availabilities:', error);
     }
   };
 
   const loadAppointmentsForDate = async (date: string) => {
-    if (!adminUser) return;
+    const expertId = selectedExpertId || adminUser?.id;
+    if (!expertId) return;
     
     setLoadingAppointments(true);
     try {
-      const response = await fetch(`/api/appointments?expertId=${adminUser.id}&date=${date}`);
+      const response = await fetch(`/api/appointments?expertId=${expertId}&date=${date}`);
       if (!response.ok) throw new Error('Failed to fetch appointments');
       const data = await response.json();
       setAppointments(data.appointments || []);
@@ -156,10 +197,11 @@ export function AvailabilityManager({ adminUser }: Props) {
   };
 
   const loadTimeSlotsForDate = async (date: string) => {
-    if (!adminUser) return;
+    const expertId = selectedExpertId || adminUser?.id;
+    if (!expertId) return;
     
     try {
-      const response = await fetch(`/api/availability?expertId=${adminUser.id}`);
+      const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
       
@@ -169,22 +211,13 @@ export function AvailabilityManager({ adminUser }: Props) {
       // Get availability for this day of week
       const dayAvailabilities = data.filter((a: any) => a.day_of_week === dayOfWeek);
       
-      // Get all time slots from availabilities (1 hour intervals)
+      // Get all time slots from availabilities (exact startTime matches)
       const availableSlots: string[] = [];
       dayAvailabilities.forEach((avail: any) => {
-        const start = new Date(`2000-01-01T${avail.start_time}`);
-        const end = new Date(`2000-01-01T${avail.end_time}`);
-        
-        // Generate hourly slots within availability range
-        let current = new Date(start);
-        while (current < end) {
-          const timeStr = current.toTimeString().substring(0, 5); // "HH:MM"
-          // Only add if it's in our TIME_SLOTS list
-          if (TIME_SLOTS.includes(timeStr) && !availableSlots.includes(timeStr)) {
-            availableSlots.push(timeStr);
-          }
-          // Add 1 hour
-          current.setHours(current.getHours() + 1);
+        const startTime = avail.start_time.substring(0, 5); // "HH:MM"
+        // Only add if it's in our TIME_SLOTS list and not already added
+        if (TIME_SLOTS.includes(startTime) && !availableSlots.includes(startTime)) {
+          availableSlots.push(startTime);
         }
       });
       
@@ -207,52 +240,122 @@ export function AvailabilityManager({ adminUser }: Props) {
     }
     
     const dateStr = formatDate(date);
+    const todayStr = formatDate(new Date());
+    
+    // Allow selecting today and future dates only
+    if (dateStr < todayStr) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Geçmiş Tarih',
+        text: 'Geçmiş tarihler için müsaitlik ayarlanamaz',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+    
     setSelectedDate(dateStr);
     setCurrentWeekStart(getWeekStart(date));
   };
 
   const handleAddTimeSlot = async (timeSlot: string) => {
-    if (!adminUser || !selectedDate) return;
+    const expertId = selectedExpertId || adminUser?.id;
+    if (!expertId || !selectedDate) return;
     
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    const dayOfWeek = getDayOfWeek(dateObj);
-    
-    // Find the next time slot (1 hour later)
-    const slotIndex = TIME_SLOTS.indexOf(timeSlot);
-    const endTime = slotIndex < TIME_SLOTS.length - 1 ? TIME_SLOTS[slotIndex + 1] : '17:00';
-    
-    // Check if this time slot already exists (exact match or overlap)
-    const existing = availabilities.find(
-      a => a.dayOfWeek === dayOfWeek && (
-        // Exact match
-        (a.startTime === timeSlot && a.endTime === endTime) ||
-        // Overlap: new slot starts within existing slot
-        (a.startTime <= timeSlot && a.endTime > timeSlot) ||
-        // Overlap: new slot ends within existing slot
-        (a.startTime < endTime && a.endTime >= endTime) ||
-        // Overlap: new slot completely contains existing slot
-        (a.startTime >= timeSlot && a.endTime <= endTime)
-      )
-    );
-    
-    if (existing) {
+    // Check if time slot is in the past
+    if (isTimeSlotPast(selectedDate, timeSlot)) {
       await Swal.fire({
-        icon: 'info',
-        title: 'Zaten Mevcut',
-        text: `Bu saat aralığı (${timeSlot}-${endTime}) zaten müsaitlik olarak tanımlı veya mevcut bir müsaitlik ile çakışıyor`,
+        icon: 'warning',
+        title: 'Süre Geçti',
+        text: 'Geçmiş tarih ve saatler için müsaitlik ayarlanamaz',
         confirmButtonColor: '#3b82f6'
       });
       return;
     }
+    
+    const dateObj = new Date(selectedDate + 'T00:00:00');
+    const dayOfWeek = getDayOfWeek(dateObj);
+    
+    // Calculate end time: same hour, 59 minutes (e.g., 09:00 -> 09:59)
+    const [hours, minutes] = timeSlot.split(':').map(Number);
+    const endTime = `${String(hours).padStart(2, '0')}:59`;
+    
+    // Check if this time slot already exists (any endTime with same startTime)
+    const existing = availabilities.find(
+      a => a.dayOfWeek === dayOfWeek && 
+      a.startTime === timeSlot
+    );
+    
+    if (existing) {
+      // If exists but with different endTime, update it
+      if (existing.endTime !== endTime) {
+        const result = await Swal.fire({
+          icon: 'question',
+          title: 'Müsaitlik Güncelle',
+          text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı (${existing.endTime}). Yeni format (${endTime}) ile güncellemek ister misiniz?`,
+          showCancelButton: true,
+          confirmButtonText: 'Güncelle',
+          cancelButtonText: 'İptal',
+          confirmButtonColor: '#3b82f6'
+        });
+        
+        if (result.isConfirmed) {
+          try {
+            const updateResponse = await fetch(`/api/availability/${existing.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                dayOfWeek: dayOfWeek,
+                startTime: timeSlot,
+                endTime: endTime
+              })
+            });
+            
+            if (!updateResponse.ok) throw new Error('Failed to update availability');
+            
+            await loadAvailabilities();
+            await loadTimeSlotsForDate(selectedDate);
+            
+            await Swal.fire({
+              icon: 'success',
+              title: 'Başarılı',
+              text: 'Müsaitlik güncellendi',
+              confirmButtonColor: '#3b82f6',
+              timer: 1500
+            });
+            return;
+          } catch (error) {
+            console.error('Error updating availability:', error);
+            await Swal.fire({
+              icon: 'error',
+              title: 'Hata',
+              text: 'Müsaitlik güncellenirken hata oluştu',
+              confirmButtonColor: '#ef4444'
+            });
+            return;
+          }
+        } else {
+          return;
+        }
+      } else {
+        await Swal.fire({
+          icon: 'info',
+          title: 'Zaten Mevcut',
+          text: `Bu saat (${timeSlot}) zaten müsaitlik olarak tanımlı`,
+          confirmButtonColor: '#3b82f6'
+        });
+        return;
+      }
+    }
 
     try {
+      const selectedExpert = experts.find(e => e.id === expertId) || adminUser;
       const requestBody = {
-        expertId: adminUser.id,
+        expertId: expertId,
         dayOfWeek: dayOfWeek,
         startTime: timeSlot,
         endTime: endTime,
-        adminName: adminUser.name,
-        adminEmail: adminUser.email
+        adminName: adminUser?.name || selectedExpert?.name || 'Admin',
+        adminEmail: adminUser?.email || selectedExpert?.email || 'admin@example.com'
       };
 
       const response = await fetch('/api/availability', {
@@ -289,16 +392,27 @@ export function AvailabilityManager({ adminUser }: Props) {
   };
 
   const handleRemoveTimeSlot = async (timeSlot: string) => {
-    if (!adminUser || !selectedDate) return;
+    const expertId = selectedExpertId || adminUser?.id;
+    if (!expertId || !selectedDate) return;
+    
+    // Check if time slot is in the past
+    if (isTimeSlotPast(selectedDate, timeSlot)) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Süre Geçti',
+        text: 'Geçmiş tarih ve saatler için müsaitlik düzenlenemez',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
     
     const dateObj = new Date(selectedDate + 'T00:00:00');
     const dayOfWeek = getDayOfWeek(dateObj);
     
-    // Find availability that contains this time slot
+    // Find availability with exact startTime match
     const availability = availabilities.find(
       a => a.dayOfWeek === dayOfWeek && 
-      a.startTime <= timeSlot && 
-      a.endTime > timeSlot
+      a.startTime === timeSlot
     );
     
     if (!availability) return;
@@ -359,15 +473,23 @@ export function AvailabilityManager({ adminUser }: Props) {
   };
 
   const isTimeSlotAvailable = (timeSlot: string): boolean => {
-    if (!selectedDate) return false;
+    if (!selectedDate || availabilities.length === 0) return false;
     
     const dateObj = new Date(selectedDate + 'T00:00:00');
     const dayOfWeek = getDayOfWeek(dateObj);
     
+    // Normalize timeSlot format (ensure HH:MM format)
+    const normalizedTimeSlot = timeSlot.length === 5 ? timeSlot : timeSlot.substring(0, 5);
+    
+    // Check if this exact time slot exists (startTime matches exactly)
     return availabilities.some(
-      a => a.dayOfWeek === dayOfWeek && 
-      a.startTime <= timeSlot && 
-      a.endTime > timeSlot
+      a => {
+        const normalizedStartTime = a.startTime && a.startTime.length >= 5 
+          ? a.startTime.substring(0, 5) 
+          : a.startTime;
+        return a.dayOfWeek === dayOfWeek && 
+        normalizedStartTime === normalizedTimeSlot;
+      }
     );
   };
 
@@ -375,6 +497,92 @@ export function AvailabilityManager({ adminUser }: Props) {
     const dateAppointments = appointments.filter(apt => apt.status === 'approved');
     setSelectedDateAppointments(dateAppointments);
     setShowAppointmentsModal(true);
+  };
+
+  const isTimeSlotPast = (dateStr: string, timeSlot: string): boolean => {
+    if (!dateStr || !timeSlot) return false;
+    
+    const now = new Date();
+    const [hours, minutes] = timeSlot.split(':').map(Number);
+    const slotDateTime = new Date(dateStr + 'T00:00:00');
+    slotDateTime.setHours(hours, minutes, 0, 0);
+    
+    return slotDateTime < now;
+  };
+
+  const handleRemoveAllForDay = async (date: Date) => {
+    if (isWeekend(date)) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Hafta Sonu',
+        text: 'Hafta sonu günlerinde müsaitlik ayarlanamaz',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    const expertId = selectedExpertId || adminUser?.id;
+    if (!expertId) return;
+
+    const dateStr = formatDate(date);
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    const dayOfWeek = getDayOfWeek(dateObj);
+
+    const result = await Swal.fire({
+      title: 'Tüm Müsaitlikleri Kaldır',
+      text: `${formatDateDisplay(dateStr)} için tüm müsaitlikleri kaldırmak istediğinize emin misiniz?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Evet, Tümünü Kaldır',
+      cancelButtonText: 'İptal'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      // Get all availabilities for this day
+      const dayAvailabilities = availabilities.filter(a => a.dayOfWeek === dayOfWeek);
+      
+      if (dayAvailabilities.length === 0) {
+        await Swal.fire({
+          icon: 'info',
+          title: 'Müsaitlik Yok',
+          text: 'Bu gün için müsaitlik bulunmamaktadır',
+          confirmButtonColor: '#3b82f6'
+        });
+        return;
+      }
+
+      // Delete all availabilities for this day
+      const deletePromises = dayAvailabilities.map(avail =>
+        fetch(`/api/availability/${avail.id}`, { method: 'DELETE' })
+      );
+
+      await Promise.all(deletePromises);
+      
+      await loadAvailabilities();
+      if (selectedDate === dateStr) {
+        await loadTimeSlotsForDate(selectedDate);
+      }
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Başarılı',
+        text: 'Tüm müsaitlikler kaldırıldı',
+        confirmButtonColor: '#3b82f6',
+        timer: 1500
+      });
+    } catch (error) {
+      console.error('Error removing all availabilities:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Müsaitlikler kaldırılırken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    }
   };
 
   const weekDays = getWeekDays();
@@ -389,11 +597,39 @@ export function AvailabilityManager({ adminUser }: Props) {
         <h2 className="text-xl sm:text-2xl font-bold">Müsaitlik Takvimim</h2>
       </div>
 
-      {/* User Info */}
+      {/* User Info & Expert Selector (for superadmin) */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-900">
-          <span className="font-semibold">{adminUser?.name}</span> olarak oturum açtınız. Sadece kendi müsaitliğinizi yönetebilirsiniz.
-        </p>
+        {adminUser?.role === 'superadmin' ? (
+          <div className="space-y-3">
+            <p className="text-sm text-blue-900">
+              <span className="font-semibold">{adminUser?.name}</span> olarak oturum açtınız. Tüm IT Uzmanlarının müsaitliklerini yönetebilirsiniz.
+            </p>
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                IT Uzmanı Seçiniz
+              </label>
+              <select
+                value={selectedExpertId || ''}
+                onChange={(e) => {
+                  const expertId = parseInt(e.target.value);
+                  setSelectedExpertId(expertId);
+                  setSelectedDate(''); // Reset selected date when expert changes
+                }}
+                className="w-full sm:w-auto border-2 border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              >
+                {experts.map((expert) => (
+                  <option key={expert.id} value={expert.id}>
+                    {expert.name} ({expert.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-blue-900">
+            <span className="font-semibold">{adminUser?.name}</span> olarak oturum açtınız. Sadece kendi müsaitliğinizi yönetebilirsiniz.
+          </p>
+        )}
       </div>
 
       {/* Weekly Calendar View */}
@@ -440,36 +676,60 @@ export function AvailabilityManager({ adminUser }: Props) {
             const isToday = dateStr === todayStr;
             const dayOfWeek = getDayOfWeek(date);
             const dayName = dayNames[dayOfWeek];
+            const isPast = dateStr < todayStr;
             
             // Count appointments for this day
             const dayAppointments = appointments.filter(apt => apt.date === dateStr && apt.status === 'approved');
             
+            // Count availabilities for this day
+            const dayAvailabilities = availabilities.filter(a => a.dayOfWeek === dayOfWeek);
+            
             return (
-              <button
-                key={idx}
-                onClick={() => handleDateSelect(date)}
-                className={`p-3 sm:p-4 rounded-lg border-2 transition text-center ${
-                  isSelected
-                    ? 'border-blue-500 bg-blue-50'
-                    : isToday
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                  {dayName}
-                </div>
-                <div className={`text-lg sm:text-xl font-bold ${
-                  isSelected ? 'text-blue-600' : isToday ? 'text-green-600' : 'text-gray-900'
-                }`}>
-                  {date.getDate()}
-                </div>
-                {dayAppointments.length > 0 && (
-                  <div className="mt-1 text-xs text-blue-600 font-medium">
-                    {dayAppointments.length} Randevu
+              <div key={idx} className="relative">
+                <button
+                  onClick={() => handleDateSelect(date)}
+                  className={`w-full p-3 sm:p-4 rounded-lg border-2 transition text-center ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50'
+                      : isToday
+                      ? 'border-green-500 bg-green-50'
+                      : isPast
+                      ? 'border-gray-300 bg-gray-100 opacity-60'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
+                    {dayName}
                   </div>
+                  <div className={`text-lg sm:text-xl font-bold ${
+                    isSelected ? 'text-blue-600' : isToday ? 'text-green-600' : isPast ? 'text-gray-400' : 'text-gray-900'
+                  }`}>
+                    {date.getDate()}
+                  </div>
+                  {dayAppointments.length > 0 && (
+                    <div className="mt-1 text-xs text-blue-600 font-medium">
+                      {dayAppointments.length} Randevu
+                    </div>
+                  )}
+                  {dayAvailabilities.length > 0 && !isPast && (
+                    <div className="mt-1 text-xs text-green-600 font-medium">
+                      {dayAvailabilities.length} Müsaitlik
+                    </div>
+                  )}
+                </button>
+                {!isPast && dayAvailabilities.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveAllForDay(date);
+                    }}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition"
+                    title="Tüm müsaitlikleri kaldır"
+                  >
+                    ×
+                  </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -482,6 +742,11 @@ export function AvailabilityManager({ adminUser }: Props) {
             <div>
               <h3 className="text-base sm:text-lg font-semibold mb-1">
                 {formatDateDisplay(selectedDate)}
+                {adminUser?.role === 'superadmin' && selectedExpertId && (
+                  <span className="text-sm font-normal text-gray-600 ml-2">
+                    - {experts.find(e => e.id === selectedExpertId)?.name || 'IT Uzmanı'}
+                  </span>
+                )}
               </h3>
               <p className="text-sm text-gray-600">
                 Seçilen tarih için saatleri ayarlayabilirsiniz
@@ -502,12 +767,15 @@ export function AvailabilityManager({ adminUser }: Props) {
               const isAvailable = isTimeSlotAvailable(timeSlot);
               const isBooked = isTimeSlotBooked(timeSlot);
               const appointment = getAppointmentForTimeSlot(timeSlot);
+              const isPast = isTimeSlotPast(selectedDate, timeSlot);
               
               return (
                 <div
                   key={timeSlot}
                   className={`relative p-3 rounded-lg border-2 transition ${
-                    isBooked
+                    isPast
+                      ? 'border-gray-300 bg-gray-100 opacity-60'
+                      : isBooked
                       ? 'border-red-500 bg-red-50'
                       : isAvailable
                       ? 'border-green-500 bg-green-50'
@@ -515,26 +783,33 @@ export function AvailabilityManager({ adminUser }: Props) {
                   }`}
                 >
                   <div className="text-center">
-                    <div className="text-sm sm:text-base font-semibold text-gray-900 mb-1">
+                    <div className={`text-sm sm:text-base font-semibold mb-1 ${
+                      isPast ? 'text-gray-400' : 'text-gray-900'
+                    }`}>
                       {timeSlot}
                     </div>
-                    {isBooked && appointment && (
+                    {isPast && (
+                      <div className="text-xs text-gray-500 font-medium mb-2">
+                        Süre Geçti
+                      </div>
+                    )}
+                    {!isPast && isBooked && appointment && (
                       <div className="text-xs text-red-700 font-medium mb-2">
                         Randevulu - Meşgul
                       </div>
                     )}
-                    {isAvailable && !isBooked && (
+                    {!isPast && isAvailable && !isBooked && (
                       <div className="text-xs text-green-700 font-medium mb-2">
                         Müsait
                       </div>
                     )}
-                    {!isAvailable && !isBooked && (
+                    {!isPast && !isAvailable && !isBooked && (
                       <div className="text-xs text-gray-500 mb-2">
                         Müsait Değil
                       </div>
                     )}
                     
-                    {!isBooked && (
+                    {!isBooked && !isPast && (
                       <button
                         onClick={() => 
                           isAvailable 
@@ -549,6 +824,11 @@ export function AvailabilityManager({ adminUser }: Props) {
                       >
                         {isAvailable ? 'Kaldır' : 'Ekle'}
                       </button>
+                    )}
+                    {isPast && (
+                      <div className="w-full py-1.5 px-2 rounded text-xs font-medium text-gray-400 bg-gray-100">
+                        Düzenlenemez
+                      </div>
                     )}
                   </div>
                 </div>

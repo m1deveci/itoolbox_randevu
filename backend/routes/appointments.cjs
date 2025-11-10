@@ -166,13 +166,12 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Expert has no availability for this day' });
       }
 
-      // Check if the requested time falls within any availability slot
-      const requestedTime = new Date(`2000-01-01T${appointmentTime}`);
+      // Check if the requested time matches exactly with any availability startTime
+      const requestedTimeStr = appointmentTime.substring(0, 5); // "HH:MM"
       const isTimeAvailable = availabilities.some((avail) => {
-        const startTime = new Date(`2000-01-01T${avail.start_time}`);
-        const endTime = new Date(`2000-01-01T${avail.end_time}`);
-        // Check if requested time is at the start of an hour slot and within availability
-        return requestedTime >= startTime && requestedTime < endTime;
+        const availStartTime = avail.start_time.substring(0, 5); // "HH:MM"
+        // Check if requested time exactly matches availability startTime
+        return availStartTime === requestedTimeStr;
       });
 
       if (!isTimeAvailable) {

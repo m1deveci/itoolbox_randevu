@@ -70,21 +70,16 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Start time must be before end time' });
       }
 
-      // Check for overlapping availabilities
-      const [overlapping] = await pool.execute(
+      // Check for exact duplicate (same startTime for same day)
+      const [duplicate] = await pool.execute(
         `SELECT id FROM availability 
-         WHERE expert_id = ? AND day_of_week = ? 
-         AND (
-           (start_time <= ? AND end_time > ?) OR
-           (start_time < ? AND end_time >= ?) OR
-           (start_time >= ? AND end_time <= ?)
-         )`,
-        [expertId, dayOfWeek, startTime, startTime, endTime, endTime, startTime, endTime]
+         WHERE expert_id = ? AND day_of_week = ? AND start_time = ?`,
+        [expertId, dayOfWeek, startTime]
       );
 
-      if (overlapping.length > 0) {
+      if (duplicate.length > 0) {
         return res.status(409).json({ 
-          error: 'Bu saat aralığı mevcut bir müsaitlik ile çakışıyor' 
+          error: 'Bu saat zaten müsaitlik olarak tanımlı' 
         });
       }
 

@@ -18,6 +18,31 @@ export function AppointmentBooking() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+
+  // Turkish GSM number mask function
+  // Format: (05XX) XXX XX XX (11 digits: 0 + 10 digits)
+  const formatPhoneNumber = (value: string): string => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '');
+    
+    // Limit to 11 digits (0 + 10 digits)
+    const limitedDigits = digits.slice(0, 11);
+    
+    // Apply mask: (05XX) XXX XX XX
+    if (limitedDigits.length === 0) return '';
+    if (limitedDigits.length <= 1) return limitedDigits;
+    if (limitedDigits.length <= 2) return `(${limitedDigits}`;
+    if (limitedDigits.length <= 4) return `(${limitedDigits})`;
+    if (limitedDigits.length <= 7) return `(${limitedDigits.slice(0, 4)}) ${limitedDigits.slice(4)}`;
+    if (limitedDigits.length <= 9) return `(${limitedDigits.slice(0, 4)}) ${limitedDigits.slice(4, 7)} ${limitedDigits.slice(7)}`;
+    // Format: (05XX) XXX XX XX (11 digits total)
+    return `(${limitedDigits.slice(0, 4)}) ${limitedDigits.slice(4, 7)} ${limitedDigits.slice(7, 9)} ${limitedDigits.slice(9, 11)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhone(formatted);
+  };
   const [ticketNo, setTicketNo] = useState('');
   const [loading, setLoading] = useState(false);
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
@@ -120,23 +145,14 @@ export function AppointmentBooking() {
       .filter((apt) => apt.status !== 'cancelled')
       .map((apt) => apt.time.substring(0, 5)); // Format: "HH:MM"
 
-    // Generate time slots from availabilities
+    // Generate time slots from availabilities (exact startTime matches)
     const timeSlots: string[] = [];
     
     dayAvailabilities.forEach((avail) => {
-      const start = new Date(`2000-01-01T${avail.start_time}`);
-      const end = new Date(`2000-01-01T${avail.end_time}`);
-      
-      // Generate hourly slots
-      let current = new Date(start);
-      while (current < end) {
-        const timeStr = current.toTimeString().substring(0, 5); // "HH:MM"
-        // Only add if not already booked
-        if (!bookedTimes.includes(timeStr)) {
-          timeSlots.push(timeStr);
-        }
-        // Add 1 hour
-        current.setHours(current.getHours() + 1);
+      const startTime = avail.start_time.substring(0, 5); // "HH:MM"
+      // Only add if not already booked
+      if (!bookedTimes.includes(startTime)) {
+        timeSlots.push(startTime);
       }
     });
 
@@ -158,7 +174,10 @@ export function AppointmentBooking() {
   };
 
   const handleBook = async () => {
-    if (!selectedExpert || !selectedDate || !selectedTime || !fullName || !email || !phone || !ticketNo) {
+    // Remove formatting from phone number for validation
+    const phoneDigits = phone.replace(/\D/g, '');
+    
+    if (!selectedExpert || !selectedDate || !selectedTime || !fullName || !email || !phoneDigits || !ticketNo) {
       await Swal.fire({
         icon: 'warning',
         title: 'Eksik Bilgi',
@@ -229,7 +248,7 @@ export function AppointmentBooking() {
           expertId: parseInt(selectedExpert),
           userName: fullName,
           userEmail: email,
-          userPhone: phone,
+          userPhone: phoneDigits,
           ticketNo: ticketNo,
           appointmentDate: selectedDate,
           appointmentTime: selectedTime
@@ -410,8 +429,9 @@ export function AppointmentBooking() {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="05XX XXX XXXX"
+                  onChange={handlePhoneChange}
+                  placeholder="(05XX) XXX XX XX"
+                  maxLength={19}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 />
               </div>
@@ -419,7 +439,8 @@ export function AppointmentBooking() {
               {/* Next Button */}
               <button
                 onClick={() => {
-                  if (!fullName || !email || !phone) {
+                  const phoneDigits = phone.replace(/\D/g, '');
+                  if (!fullName || !email || !phoneDigits) {
                     Swal.fire({
                       icon: 'warning',
                       title: 'Eksik Bilgi',

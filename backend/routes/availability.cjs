@@ -142,6 +142,44 @@ module.exports = (pool) => {
         [finalExpertId, dayOfWeek, startTime, endTime]
       );
 
+      // Log activity
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || adminName || 'System';
+      
+      try {
+        // Get expert name for log
+        const [expertData] = await pool.execute(
+          'SELECT name FROM experts WHERE id = ?',
+          [finalExpertId]
+        );
+        const expertName = expertData.length > 0 ? expertData[0].name : 'Unknown';
+
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'add_availability',
+            'availability',
+            result.insertId,
+            JSON.stringify({
+              availability_id: result.insertId,
+              expert_id: finalExpertId,
+              expert_name: expertName,
+              day_of_week: dayOfWeek,
+              start_time: startTime,
+              end_time: endTime
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging activity:', logError);
+        // Don't fail the request if logging fails
+      }
+
       res.status(201).json({
         id: result.insertId,
         expertId: finalExpertId,
@@ -203,13 +241,60 @@ module.exports = (pool) => {
   // DELETE /api/availability/:id - Delete availability
   router.delete('/:id', async (req, res) => {
     try {
+      const availabilityId = parseInt(req.params.id);
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || 'System';
+
+      // Get availability details before delete
+      const [availabilities] = await pool.execute(
+        `SELECT a.*, e.name as expert_name 
+         FROM availability a 
+         JOIN experts e ON a.expert_id = e.id 
+         WHERE a.id = ?`,
+        [availabilityId]
+      );
+
+      if (availabilities.length === 0) {
+        return res.status(404).json({ error: 'Availability not found' });
+      }
+
+      const availability = availabilities[0];
+
       const [result] = await pool.execute(
         'DELETE FROM availability WHERE id = ?',
-        [req.params.id]
+        [availabilityId]
       );
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Availability not found' });
+      }
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'remove_availability',
+            'availability',
+            availabilityId,
+            JSON.stringify({
+              availability_id: availabilityId,
+              expert_id: availability.expert_id,
+              expert_name: availability.expert_name,
+              day_of_week: availability.day_of_week,
+              start_time: availability.start_time,
+              end_time: availability.end_time
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging activity:', logError);
+        // Don't fail the request if logging fails
       }
 
       res.json({ message: 'Availability deleted successfully' });

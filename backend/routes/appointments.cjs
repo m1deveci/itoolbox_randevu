@@ -1,5 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const {
+  sendAppointmentNotificationToExpert,
+  sendAppointmentApprovalToUser,
+  sendAppointmentCancellationToUser
+} = require('../utils/emailHelper.cjs');
 
 module.exports = (pool) => {
   // GET /api/appointments - Get appointments with optional filtering
@@ -139,15 +144,17 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Ticket number must be in format INC0XXXXXX (10 characters total)' });
       }
 
-      // Check if expert exists
+      // Check if expert exists and get expert details
       const [experts] = await pool.execute(
-        'SELECT id FROM experts WHERE id = ?',
+        'SELECT id, name, email FROM experts WHERE id = ?',
         [expertId]
       );
 
       if (experts.length === 0) {
         return res.status(404).json({ error: 'Expert not found' });
       }
+
+      const expert = experts[0];
 
       // Check if expert has availability for this date and time
       const appointmentDateObj = new Date(appointmentDate + 'T00:00:00');
@@ -196,6 +203,23 @@ module.exports = (pool) => {
         [expertId, userName, userEmail, userPhone, ticketNo, appointmentDate, appointmentTime, notes || null]
       );
 
+      const appointment = {
+        id: result.insertId,
+        expert_id: expertId,
+        user_name: userName,
+        user_email: userEmail,
+        user_phone: userPhone,
+        ticket_no: ticketNo,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
+        notes: notes || null
+      };
+
+      // Send email notification to expert (async, don't wait for it)
+      sendAppointmentNotificationToExpert(pool, appointment, expert).catch(error => {
+        console.error('Error sending email notification to expert:', error);
+      });
+
       res.status(201).json({
         id: result.insertId,
         expertId,
@@ -217,14 +241,71 @@ module.exports = (pool) => {
   // PUT /api/appointments/:id/approve - Approve appointment
   router.put('/:id/approve', async (req, res) => {
     try {
+      const appointmentId = parseInt(req.params.id);
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || 'System';
+      
+      // Get appointment details before update
+      const [appointments] = await pool.execute(
+        `SELECT a.*, e.name as expert_name, e.email as expert_email
+         FROM appointments a 
+         JOIN experts e ON a.expert_id = e.id 
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      const appointment = appointments[0];
+
       const [result] = await pool.execute(
         'UPDATE appointments SET status = ? WHERE id = ?',
-        ['approved', req.params.id]
+        ['approved', appointmentId]
       );
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Appointment not found' });
       }
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'approve_appointment',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              expert_id: appointment.expert_id,
+              expert_name: appointment.expert_name,
+              user_name: appointment.user_name,
+              user_email: appointment.user_email,
+              appointment_date: appointment.appointment_date,
+              appointment_time: appointment.appointment_time,
+              ticket_no: appointment.ticket_no
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging activity:', logError);
+        // Don't fail the request if logging fails
+      }
+
+      // Send email notification to user (async, don't wait for it)
+      sendAppointmentApprovalToUser(pool, appointment, { 
+        name: appointment.expert_name, 
+        email: appointment.expert_email || '' 
+      }).catch(error => {
+        console.error('Error sending approval email to user:', error);
+      });
 
       res.json({ message: 'Appointment approved successfully', status: 'approved' });
     } catch (error) {
@@ -236,16 +317,70 @@ module.exports = (pool) => {
   // PUT /api/appointments/:id/cancel - Cancel/reject appointment
   router.put('/:id/cancel', async (req, res) => {
     try {
+      const appointmentId = parseInt(req.params.id);
       const { cancellationReason } = req.body;
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || 'System';
+
+      // Get appointment details before update
+      const [appointments] = await pool.execute(
+        `SELECT a.*, e.name as expert_name, e.email as expert_email
+         FROM appointments a 
+         JOIN experts e ON a.expert_id = e.id 
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      const appointment = appointments[0];
 
       const [result] = await pool.execute(
         'UPDATE appointments SET status = ?, cancellation_reason = ? WHERE id = ?',
-        ['cancelled', cancellationReason || null, req.params.id]
+        ['cancelled', cancellationReason || null, appointmentId]
       );
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Appointment not found' });
       }
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'cancel_appointment',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              expert_id: appointment.expert_id,
+              expert_name: appointment.expert_name,
+              user_name: appointment.user_name,
+              user_email: appointment.user_email,
+              appointment_date: appointment.appointment_date,
+              appointment_time: appointment.appointment_time,
+              ticket_no: appointment.ticket_no,
+              cancellation_reason: cancellationReason || null
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging activity:', logError);
+        // Don't fail the request if logging fails
+      }
+
+      // Send email notification to user (async, don't wait for it)
+      sendAppointmentCancellationToUser(pool, appointment, { name: appointment.expert_name, email: appointment.expert_email || '' }, cancellationReason).catch(error => {
+        console.error('Error sending cancellation email to user:', error);
+      });
 
       res.json({ message: 'Appointment cancelled successfully', status: 'cancelled' });
     } catch (error) {

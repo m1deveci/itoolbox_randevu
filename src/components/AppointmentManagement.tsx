@@ -90,7 +90,11 @@ export function AppointmentManagement({ adminUser }: Props) {
     try {
       const response = await fetch(`/api/appointments/${id}/approve`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || 'System'
+        }
       });
 
       if (!response.ok) throw new Error('Failed to approve appointment');
@@ -131,7 +135,11 @@ export function AppointmentManagement({ adminUser }: Props) {
     try {
       const response = await fetch(`/api/appointments/${id}/cancel`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || 'System'
+        },
         body: JSON.stringify({ cancellationReason: cancellationReason.trim() })
       });
 

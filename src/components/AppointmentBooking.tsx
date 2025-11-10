@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Search } from 'lucide-react';
+import { Calendar, Clock, User, Search, ExternalLink, Download } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface Availability {
@@ -340,290 +340,341 @@ export function AppointmentBooking() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8 flex items-center">
-      <div className="w-full max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="bg-blue-500 text-white rounded-full p-3">
-              <Calendar className="w-6 h-6" />
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Left Sidebar - Backup Links (Fixed) */}
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-6">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Download className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+                    Yedekleme ile İlgili Faydalı Bağlantılar
+                  </h3>
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 mb-4">
+                  Randevu öncesinde verilerinizi yedeklemeniz önerilir. Aşağıdaki bağlantılardan yedekleme işlemlerinizi kolayca yapabilirsiniz:
+                </p>
+                <div className="space-y-3">
+                  <a
+                    href="https://youtube.com/shorts/V94yOBj7aJY?si=vNVkPGDzeLHMC3ca"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    <span>iCloud Yedeği Alma</span>
+                  </a>
+                  <a
+                    href="https://www.youtube.com/watch?v=6v2v0Zkrves"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    <span>iPhone WhatsApp Yedekleme</span>
+                  </a>
+                  <a
+                    href="https://www.youtube.com/watch?v=9J29mDVdpNo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition p-2 rounded hover:bg-blue-100"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    <span>Samsung WhatsApp Yedekleme</span>
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">IT Uzman Randevusu</h1>
-          <p className="text-sm sm:text-base text-gray-600">Uzmanlarımızdan hizmet almak için randevu alınız</p>
-        </div>
 
-        {/* Check Status Button */}
-        <div className="text-center mb-6">
-          <button
-            onClick={() => setShowStatusModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-600 border-2 border-blue-600 rounded-lg hover:bg-blue-50 transition font-medium text-sm sm:text-base"
-          >
-            <Search size={18} />
-            Randevu Durumu Sorgula
-          </button>
-        </div>
-
-        {/* Booking Form */}
-        <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
-          {/* Progress Indicator */}
-          <div className="mb-6">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className={`flex items-center ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                  currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
-                }`}>
-                  1
+          {/* Right Side - Booking Form */}
+          <div className="lg:col-span-2">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="bg-blue-500 text-white rounded-full p-3">
+                  <Calendar className="w-6 h-6" />
                 </div>
-                <span className="ml-2 text-sm font-medium hidden sm:inline">Kişisel Bilgiler</span>
               </div>
-              <div className={`w-12 h-1 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-              <div className={`flex items-center ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                  currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
-                }`}>
-                  2
-                </div>
-                <span className="ml-2 text-sm font-medium hidden sm:inline">Randevu Detayları</span>
-              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">IT Uzman Randevusu</h1>
+              <p className="text-sm sm:text-base text-gray-600">Uzmanlarımızdan hizmet almak için randevu alınız</p>
             </div>
-          </div>
 
-          {/* Step 1: Personal Information */}
-          {currentStep === 1 && (
-            <div className="space-y-5 sm:space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Kişisel Bilgileriniz</h3>
-              
-              {/* Full Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Adınız Soyadınız <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Adınız ve soyadınız"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  E-posta Adresiniz <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ornek@email.com"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Gsm Numaranız <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                  placeholder="(05XX) XXX XX XX"
-                  maxLength={19}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-              </div>
-
-              {/* Next Button */}
+            {/* Check Status Button */}
+            <div className="text-center mb-6">
               <button
-                onClick={() => {
-                  const phoneDigits = phone.replace(/\D/g, '');
-                  if (!fullName || !email || !phoneDigits) {
-                    Swal.fire({
-                      icon: 'warning',
-                      title: 'Eksik Bilgi',
-                      text: 'Lütfen tüm alanları doldurunuz',
-                      confirmButtonColor: '#3b82f6'
-                    });
-                    return;
-                  }
-                  if (!email.includes('@')) {
-                    Swal.fire({
-                      icon: 'warning',
-                      title: 'Geçersiz E-posta',
-                      text: 'Lütfen geçerli bir e-posta adresi giriniz',
-                      confirmButtonColor: '#3b82f6'
-                    });
-                    return;
-                  }
-                  setCurrentStep(2);
-                }}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition duration-200 text-sm sm:text-base"
+                onClick={() => setShowStatusModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-600 border-2 border-blue-600 rounded-lg hover:bg-blue-50 transition font-medium text-sm sm:text-base"
               >
-                Devam Et →
+                <Search size={18} />
+                Randevu Durumu Sorgula
               </button>
             </div>
-          )}
 
-          {/* Step 2: Appointment Details */}
-          {currentStep === 2 && (
-            <div className="space-y-5 sm:space-y-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Randevu Detayları</h3>
-                <button
-                  onClick={() => setCurrentStep(1)}
-                  className="text-sm text-gray-600 hover:text-gray-900"
-                >
-                  ← Geri
-                </button>
+            {/* Booking Form */}
+            <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+              {/* Progress Indicator */}
+              <div className="mb-6">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <div className={`flex items-center ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                      currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
+                      1
+                    </div>
+                    <span className="ml-2 text-sm font-medium hidden sm:inline">Kişisel Bilgiler</span>
+                  </div>
+                  <div className={`w-12 h-1 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+                  <div className={`flex items-center ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                      currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
+                      2
+                    </div>
+                    <span className="ml-2 text-sm font-medium hidden sm:inline">Randevu Detayları</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Ticket Info */}
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
+              {/* Step 1: Personal Information */}
+              {currentStep === 1 && (
+                <div className="space-y-5 sm:space-y-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Kişisel Bilgileriniz</h3>
+                  
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Adınız Soyadınız <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Adınız ve soyadınız"
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-blue-800 font-medium mb-1">
-                      Önemli: Randevu almadan önce Ravago SSP üzerinden Ticket açılması gerekmektedir.
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      E-posta Adresiniz <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="ornek@email.com"
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Gsm Numaranız <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={handlePhoneChange}
+                      placeholder="(05XX) XXX XX XX"
+                      maxLength={19}
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => {
+                      const phoneDigits = phone.replace(/\D/g, '');
+                      if (!fullName || !email || !phoneDigits) {
+                        Swal.fire({
+                          icon: 'warning',
+                          title: 'Eksik Bilgi',
+                          text: 'Lütfen tüm alanları doldurunuz',
+                          confirmButtonColor: '#3b82f6'
+                        });
+                        return;
+                      }
+                      if (!email.includes('@')) {
+                        Swal.fire({
+                          icon: 'warning',
+                          title: 'Geçersiz E-posta',
+                          text: 'Lütfen geçerli bir e-posta adresi giriniz',
+                          confirmButtonColor: '#3b82f6'
+                        });
+                        return;
+                      }
+                      setCurrentStep(2);
+                    }}
+                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition duration-200 text-sm sm:text-base"
+                  >
+                    Devam Et →
+                  </button>
+                </div>
+              )}
+
+            {/* Step 2: Appointment Details */}
+            {currentStep === 2 && (
+              <div className="space-y-5 sm:space-y-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Randevu Detayları</h3>
+                  <button
+                    onClick={() => setCurrentStep(1)}
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    ← Geri
+                  </button>
+                </div>
+
+                {/* Ticket Info */}
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-blue-800 font-medium mb-1">
+                        Önemli: Randevu almadan önce Ravago SSP üzerinden Ticket açılması gerekmektedir.
+                      </p>
+                      <a
+                        href="https://itservice.ravago.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
+                      >
+                        RAVAGO SSP (itservice.ravago.com) →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* IT Ticket No */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    IT Ticket No <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={ticketNo}
+                    onChange={handleTicketNoChange}
+                    maxLength={10}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition font-mono uppercase"
+                  />
+                </div>
+
+                {/* Expert Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    IT Uzmanınızı Seçiniz <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedExpert}
+                    onChange={(e) => {
+                      setSelectedExpert(e.target.value);
+                      setSelectedTime(''); // Reset time when expert changes
+                    }}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  >
+                    <option value="">-- Uzman Seçiniz --</option>
+                    {experts.map((expert: any) => (
+                      <option key={expert.id} value={expert.id}>
+                        {expert.name} ({expert.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Tercih Ettiğiniz Tarih <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    min={getTodayDate()}
+                    value={selectedDate}
+                    onChange={(e) => {
+                      const date = e.target.value;
+                      if (isWeekend(date)) {
+                        Swal.fire({
+                          icon: 'warning',
+                          title: 'Hafta Sonu Seçilemez',
+                          text: 'Hafta sonu günleri seçilemez. Lütfen Pazartesi-Cuma arasında bir gün seçiniz.',
+                          confirmButtonColor: '#3b82f6'
+                        });
+                        return;
+                      }
+                      setSelectedDate(date);
+                      setSelectedTime(''); // Reset time when date changes
+                    }}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  />
+                </div>
+
+                {/* Time Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Tercih Ettiğiniz Saat <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    disabled={!selectedExpert || !selectedDate || loadingAvailability || availableTimes.length === 0}
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    {!selectedExpert || !selectedDate ? (
+                      <option value="">Önce uzman ve tarih seçiniz</option>
+                    ) : loadingAvailability ? (
+                      <option value="">Yükleniyor...</option>
+                    ) : availableTimes.length === 0 ? (
+                      <option value="">Meşgul - Bu tarihte müsaitlik bulunmamaktadır</option>
+                    ) : (
+                      <>
+                        <option value="">-- Saat Seçiniz --</option>
+                        {availableTimes.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  {selectedExpert && selectedDate && !loadingAvailability && availableTimes.length === 0 && (
+                    <p className="mt-2 text-sm text-red-600">
+                      ⚠️ Seçilen IT Uzmanı bu tarihte müsaitlik girmemiş veya tüm saatler dolu.
                     </p>
-                    <a
-                      href="https://itservice.ravago.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
-                    >
-                      RAVAGO SSP (itservice.ravago.com) →
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              {/* IT Ticket No */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  IT Ticket No <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={ticketNo}
-                  onChange={handleTicketNoChange}
-                  maxLength={10}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition font-mono uppercase"
-                />
-              </div>
-
-              {/* Expert Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  IT Uzmanınızı Seçiniz <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={selectedExpert}
-                  onChange={(e) => {
-                    setSelectedExpert(e.target.value);
-                    setSelectedTime(''); // Reset time when expert changes
-                  }}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                >
-                  <option value="">-- Uzman Seçiniz --</option>
-                  {experts.map((expert: any) => (
-                    <option key={expert.id} value={expert.id}>
-                      {expert.name} ({expert.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Tercih Ettiğiniz Tarih <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  min={getTodayDate()}
-                  value={selectedDate}
-                  onChange={(e) => {
-                    const date = e.target.value;
-                    if (isWeekend(date)) {
-                      Swal.fire({
-                        icon: 'warning',
-                        title: 'Hafta Sonu Seçilemez',
-                        text: 'Hafta sonu günleri seçilemez. Lütfen Pazartesi-Cuma arasında bir gün seçiniz.',
-                        confirmButtonColor: '#3b82f6'
-                      });
-                      return;
-                    }
-                    setSelectedDate(date);
-                    setSelectedTime(''); // Reset time when date changes
-                  }}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-              </div>
-
-              {/* Time Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Tercih Ettiğiniz Saat <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  disabled={!selectedExpert || !selectedDate || loadingAvailability || availableTimes.length === 0}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {!selectedExpert || !selectedDate ? (
-                    <option value="">Önce uzman ve tarih seçiniz</option>
-                  ) : loadingAvailability ? (
-                    <option value="">Yükleniyor...</option>
-                  ) : availableTimes.length === 0 ? (
-                    <option value="">Meşgul - Bu tarihte müsaitlik bulunmamaktadır</option>
-                  ) : (
-                    <>
-                      <option value="">-- Saat Seçiniz --</option>
-                      {availableTimes.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </>
                   )}
-                </select>
-                {selectedExpert && selectedDate && !loadingAvailability && availableTimes.length === 0 && (
-                  <p className="mt-2 text-sm text-red-600">
-                    ⚠️ Seçilen IT Uzmanı bu tarihte müsaitlik girmemiş veya tüm saatler dolu.
-                  </p>
-                )}
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  onClick={handleBook}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 text-sm sm:text-base"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Yükleniyor...
+                    </span>
+                  ) : (
+                    'Randevu Al'
+                  )}
+                </button>
+
+                {/* Info */}
+                <p className="text-xs text-gray-500 text-center">
+                  Tüm alanları doldurarak randevu talebinizi gönderin. En kısa sürede onaylanacaktır.
+                </p>
               </div>
-
-              {/* Submit Button */}
-              <button
-                onClick={handleBook}
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 text-sm sm:text-base"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Yükleniyor...
-                  </span>
-                ) : (
-                  'Randevu Al'
-                )}
-              </button>
-
-              {/* Info */}
-              <p className="text-xs text-gray-500 text-center">
-                Tüm alanları doldurarak randevu talebinizi gönderin. En kısa sürede onaylanacaktır.
-              </p>
+            )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 

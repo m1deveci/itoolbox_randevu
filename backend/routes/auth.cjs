@@ -56,25 +56,42 @@ router.post('/login', async (req, res) => {
 
     // Add/update admin as expert in randevu database using the same ID from ittoolbox
     // This ensures ID consistency between ittoolbox users and randevu experts
+    // Also sync role from ittoolbox to experts table
     try {
-      // Use INSERT ... ON DUPLICATE KEY UPDATE to ensure expert exists with same ID
+      // Use INSERT ... ON DUPLICATE KEY UPDATE to ensure expert exists with same ID and role
       await randevuPool.execute(
-        `INSERT INTO experts (id, name, email) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email)`,
-        [user.id, user.name, user.email]
+        `INSERT INTO experts (id, name, email, role) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email), role = VALUES(role)`,
+        [user.id, user.name, user.email, user.role]
       );
     } catch (error) {
       console.error('Error syncing expert:', error);
       // Don't fail login if expert sync fails
     }
 
+    // Get role from experts table (not from ittoolbox)
+    let expertRole = user.role; // fallback to ittoolbox role
+    try {
+      const [experts] = await randevuPool.execute(
+        'SELECT role FROM experts WHERE id = ?',
+        [user.id]
+      );
+      if (experts.length > 0 && experts[0].role) {
+        expertRole = experts[0].role;
+      }
+    } catch (error) {
+      console.error('Error getting expert role:', error);
+      // Use ittoolbox role as fallback
+    }
+
     // Return user info (without password)
     // expertId is same as id since we use the same ID from ittoolbox
+    // Role comes from experts table
     res.json({
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: expertRole,
       avatar: user.avatar,
       authenticated: true
     });

@@ -95,7 +95,10 @@ export function AvailabilityManager({ adminUser }: Props) {
       const expertId = selectedExpertId || adminUser?.id;
       if (expertId) {
         loadAppointmentsForDate(selectedDate);
-        loadTimeSlotsForDate(selectedDate);
+        // Load time slots when date or availabilities change
+        if (availabilities.length > 0 || selectedDate) {
+          loadTimeSlotsForDate(selectedDate);
+        }
       }
     }
   }, [selectedDate, availabilities, selectedExpertId, adminUser]);
@@ -162,19 +165,24 @@ export function AvailabilityManager({ adminUser }: Props) {
   const loadAvailabilities = async () => {
     try {
       const expertId = selectedExpertId || adminUser?.id;
-      if (!expertId) return;
+      if (!expertId) {
+        setAvailabilities([]);
+        return;
+      }
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
       const mapped = data.map((a: any) => ({
         id: a.id.toString(),
         dayOfWeek: a.day_of_week,
-        startTime: a.start_time.substring(0, 5), // "HH:MM" format
-        endTime: a.end_time.substring(0, 5) // "HH:MM" format
+        startTime: a.start_time ? a.start_time.substring(0, 5) : '', // "HH:MM" format
+        endTime: a.end_time ? a.end_time.substring(0, 5) : '' // "HH:MM" format
       }));
       setAvailabilities(mapped);
+      console.log('Availabilities loaded:', mapped.length, 'items for expert', expertId);
     } catch (error) {
       console.error('Error loading availabilities:', error);
+      setAvailabilities([]);
     }
   };
 
@@ -360,7 +368,11 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       const response = await fetch('/api/availability', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || 'System'
+        },
         body: JSON.stringify(requestBody)
       });
 
@@ -370,7 +382,10 @@ export function AvailabilityManager({ adminUser }: Props) {
         throw new Error(data.error || 'Müsaitlik eklenirken hata oluştu');
       }
 
+      // Reload availabilities and time slots
       await loadAvailabilities();
+      // Small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
       await loadTimeSlotsForDate(selectedDate);
       
       await Swal.fire({
@@ -380,6 +395,9 @@ export function AvailabilityManager({ adminUser }: Props) {
         confirmButtonColor: '#3b82f6',
         timer: 1500
       });
+      
+      // Force re-render by reloading availabilities again
+      await loadAvailabilities();
     } catch (error) {
       console.error('Error adding availability:', error);
       await Swal.fire({
@@ -432,12 +450,19 @@ export function AvailabilityManager({ adminUser }: Props) {
 
     try {
       const response = await fetch(`/api/availability/${availability.id}`, { 
-        method: 'DELETE' 
+        method: 'DELETE',
+        headers: {
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': adminUser?.name || 'System'
+        }
       });
       
       if (!response.ok) throw new Error('Failed to delete availability');
       
+      // Reload availabilities and time slots
       await loadAvailabilities();
+      // Small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
       await loadTimeSlotsForDate(selectedDate);
       
       await Swal.fire({
@@ -447,6 +472,9 @@ export function AvailabilityManager({ adminUser }: Props) {
         confirmButtonColor: '#3b82f6',
         timer: 1500
       });
+      
+      // Force re-render by reloading availabilities again
+      await loadAvailabilities();
     } catch (error) {
       console.error('Error deleting availability:', error);
       await Swal.fire({
@@ -473,7 +501,7 @@ export function AvailabilityManager({ adminUser }: Props) {
   };
 
   const isTimeSlotAvailable = (timeSlot: string): boolean => {
-    if (!selectedDate || availabilities.length === 0) return false;
+    if (!selectedDate) return false;
     
     const dateObj = new Date(selectedDate + 'T00:00:00');
     const dayOfWeek = getDayOfWeek(dateObj);
@@ -482,15 +510,18 @@ export function AvailabilityManager({ adminUser }: Props) {
     const normalizedTimeSlot = timeSlot.length === 5 ? timeSlot : timeSlot.substring(0, 5);
     
     // Check if this exact time slot exists (startTime matches exactly)
-    return availabilities.some(
+    const isAvailable = availabilities.some(
       a => {
-        const normalizedStartTime = a.startTime && a.startTime.length >= 5 
+        if (!a || !a.startTime) return false;
+        const normalizedStartTime = a.startTime.length >= 5 
           ? a.startTime.substring(0, 5) 
           : a.startTime;
         return a.dayOfWeek === dayOfWeek && 
         normalizedStartTime === normalizedTimeSlot;
       }
     );
+    
+    return isAvailable;
   };
 
   const handleShowAppointments = () => {
@@ -557,7 +588,13 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       // Delete all availabilities for this day
       const deletePromises = dayAvailabilities.map(avail =>
-        fetch(`/api/availability/${avail.id}`, { method: 'DELETE' })
+        fetch(`/api/availability/${avail.id}`, { 
+          method: 'DELETE',
+          headers: {
+            'x-user-id': adminUser?.id?.toString() || '',
+            'x-user-name': adminUser?.name || 'System'
+          }
+        })
       );
 
       await Promise.all(deletePromises);

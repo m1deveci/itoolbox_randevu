@@ -19,7 +19,7 @@ module.exports = (pool) => {
   router.get('/', async (req, res) => {
     try {
       const [experts] = await pool.execute(
-        'SELECT id, name, email, created_at FROM experts ORDER BY name'
+        'SELECT id, name, email, role, created_at FROM experts ORDER BY name'
       );
       res.json(experts);
     } catch (error) {
@@ -32,7 +32,7 @@ module.exports = (pool) => {
   router.get('/:id', async (req, res) => {
     try {
       const [experts] = await pool.execute(
-        'SELECT id, name, email, created_at FROM experts WHERE id = ?',
+        'SELECT id, name, email, role, created_at FROM experts WHERE id = ?',
         [req.params.id]
       );
 

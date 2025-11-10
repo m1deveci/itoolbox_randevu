@@ -247,8 +247,10 @@ export function SettingsPage({ adminUser }: Props) {
       'update_setting': 'Ayar Güncelleme',
       'login': 'Giriş',
       'logout': 'Çıkış',
-      'approve': 'Onaylama',
-      'cancel': 'İptal'
+      'approve_appointment': 'Randevu Onaylama',
+      'cancel_appointment': 'Randevu İptal',
+      'add_availability': 'Müsaitlik Ekleme',
+      'remove_availability': 'Müsaitlik Kaldırma'
     };
     return actionMap[action] || action;
   };

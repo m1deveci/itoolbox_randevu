@@ -580,6 +580,9 @@ module.exports = (pool) => {
         return res.status(404).json({ error: 'Failed to update appointment' });
       }
 
+      // Update appointment object with reassignment reason for email notifications
+      appointment.reassignment_reason = reassignmentReason;
+
       // Log activity
       try {
         await pool.execute(

@@ -1,6 +1,26 @@
 const nodemailer = require('nodemailer');
 
 /**
+ * Get site title from database
+ */
+async function getSiteTitle(pool) {
+  try {
+    const [result] = await pool.execute(
+      'SELECT value FROM settings WHERE key_name = ?',
+      ['site_title']
+    );
+
+    if (result.length > 0) {
+      return result[0].value || 'IT Randevu Sistemi';
+    }
+    return 'IT Randevu Sistemi';
+  } catch (error) {
+    console.error('Error fetching site title:', error);
+    return 'IT Randevu Sistemi';
+  }
+}
+
+/**
  * Get SMTP settings from database
  */
 async function getSmtpSettings(pool) {
@@ -8,12 +28,12 @@ async function getSmtpSettings(pool) {
     const [settings] = await pool.execute(
       'SELECT key_name, value FROM settings WHERE key_name LIKE "smtp_%"'
     );
-    
+
     const smtpSettings = {};
     settings.forEach(setting => {
       smtpSettings[setting.key_name] = setting.value;
     });
-    
+
     return smtpSettings;
   } catch (error) {
     console.error('Error fetching SMTP settings:', error);
@@ -148,7 +168,16 @@ END:VCALENDAR`;
 /**
  * Send appointment notification to expert
  */
-async function sendAppointmentNotificationToExpert(pool, appointment, expert) {
+async function sendAppointmentNotificationToExpert(pool, siteTitle, appointment, expert) {
+  // If siteTitle not provided, fetch from database (backward compatibility)
+  if (!siteTitle || typeof siteTitle === 'object') {
+    // siteTitle is actually appointment (old signature)
+    const tempAppointment = siteTitle;
+    expert = appointment;
+    appointment = tempAppointment;
+    siteTitle = await getSiteTitle(pool);
+  }
+
   // Validate and parse appointment date
   if (!appointment.appointment_date) {
     console.error('Appointment date is missing');
@@ -175,7 +204,7 @@ async function sendAppointmentNotificationToExpert(pool, appointment, expert) {
     day: 'numeric'
   });
 
-  const subject = `Yeni Randevu Talebi - ${formattedDate}`;
+  const subject = `${siteTitle} - Yeni Randevu Talebi - ${formattedDate}`;
   const text = `
 Merhaba ${expert.name},
 
@@ -233,7 +262,16 @@ IT Randevu Sistemi
 /**
  * Send appointment approval notification to user
  */
-async function sendAppointmentApprovalToUser(pool, appointment, expert) {
+async function sendAppointmentApprovalToUser(pool, siteTitle, appointment, expert) {
+  // If siteTitle not provided, fetch from database (backward compatibility)
+  if (!siteTitle || typeof siteTitle === 'object') {
+    // siteTitle is actually appointment (old signature)
+    const tempAppointment = siteTitle;
+    expert = appointment;
+    appointment = tempAppointment;
+    siteTitle = await getSiteTitle(pool);
+  }
+
   // Validate and parse appointment date
   if (!appointment.appointment_date) {
     console.error('Appointment date is missing');
@@ -260,7 +298,7 @@ async function sendAppointmentApprovalToUser(pool, appointment, expert) {
     day: 'numeric'
   });
 
-  const subject = `Randevunuz Onaylandı - ${formattedDate}`;
+  const subject = `${siteTitle} - Randevunuz Onaylandı - ${formattedDate}`;
   const text = `
 Merhaba ${appointment.user_name},
 
@@ -329,7 +367,16 @@ IT Randevu Sistemi
 /**
  * Send appointment approval notification to expert
  */
-async function sendAppointmentApprovalToExpert(pool, appointment, expert) {
+async function sendAppointmentApprovalToExpert(pool, siteTitle, appointment, expert) {
+  // If siteTitle not provided, fetch from database (backward compatibility)
+  if (!siteTitle || typeof siteTitle === 'object') {
+    // siteTitle is actually appointment (old signature)
+    const tempAppointment = siteTitle;
+    expert = appointment;
+    appointment = tempAppointment;
+    siteTitle = await getSiteTitle(pool);
+  }
+
   // Validate and parse appointment date
   if (!appointment.appointment_date) {
     console.error('Appointment date is missing');
@@ -356,7 +403,7 @@ async function sendAppointmentApprovalToExpert(pool, appointment, expert) {
     day: 'numeric'
   });
 
-  const subject = `Randevuyu Onayladınız - ${formattedDate}`;
+  const subject = `${siteTitle} - Randevuyu Onayladınız - ${formattedDate}`;
   const text = `
 Merhaba ${expert.name},
 
@@ -427,7 +474,18 @@ IT Randevu Sistemi
 /**
  * Send appointment cancellation notification to user
  */
-async function sendAppointmentCancellationToUser(pool, appointment, expert, cancellationReason) {
+async function sendAppointmentCancellationToUser(pool, siteTitle, appointment, expert, cancellationReason) {
+  // If siteTitle not provided, fetch from database (backward compatibility)
+  if (!siteTitle || typeof siteTitle === 'object') {
+    // siteTitle is actually appointment (old signature)
+    const tempAppointment = siteTitle;
+    const tempExpert = appointment;
+    cancellationReason = expert; // In old signature, expert parameter is actually cancellationReason
+    appointment = tempAppointment;
+    expert = tempExpert;
+    siteTitle = await getSiteTitle(pool);
+  }
+
   // Validate and parse appointment date
   if (!appointment.appointment_date) {
     console.error('Appointment date is missing');
@@ -454,7 +512,7 @@ async function sendAppointmentCancellationToUser(pool, appointment, expert, canc
     day: 'numeric'
   });
 
-  const subject = `Randevunuz İptal Edildi - ${formattedDate}`;
+  const subject = `${siteTitle} - Randevunuz İptal Edildi - ${formattedDate}`;
   const text = `
 Merhaba ${appointment.user_name},
 
@@ -508,8 +566,20 @@ IT Randevu Sistemi
 /**
  * Send appointment reassignment notification to old expert
  */
-async function sendReassignmentNotificationToOldExpert(pool, appointment, oldExpert, newExpert) {
+async function sendReassignmentNotificationToOldExpert(pool, siteTitle, appointment, oldExpert, newExpert) {
   try {
+    // If siteTitle not provided, fetch from database (backward compatibility)
+    if (!siteTitle || typeof siteTitle === 'object') {
+      // siteTitle is actually appointment (old signature)
+      const tempAppointment = siteTitle;
+      const tempOldExpert = appointment;
+      const tempNewExpert = oldExpert;
+      appointment = tempAppointment;
+      oldExpert = tempOldExpert;
+      newExpert = tempNewExpert;
+      siteTitle = await getSiteTitle(pool);
+    }
+
     // Validate and parse appointment date
     if (!appointment.appointment_date) {
       console.error('Appointment date is missing');
@@ -536,7 +606,7 @@ async function sendReassignmentNotificationToOldExpert(pool, appointment, oldExp
       day: 'numeric'
     });
 
-    const subject = `Randevu Ataması Değiştirildi - ${formattedDate}`;
+    const subject = `${siteTitle} - Randevu Ataması Değiştirildi - ${formattedDate}`;
     const text = `
 Merhaba ${oldExpert.name},
 
@@ -599,8 +669,20 @@ IT Randevu Sistemi
 /**
  * Send appointment reassignment notification to new expert
  */
-async function sendReassignmentNotificationToNewExpert(pool, appointment, newExpert, oldExpert) {
+async function sendReassignmentNotificationToNewExpert(pool, siteTitle, appointment, newExpert, oldExpert) {
   try {
+    // If siteTitle not provided, fetch from database (backward compatibility)
+    if (!siteTitle || typeof siteTitle === 'object') {
+      // siteTitle is actually appointment (old signature)
+      const tempAppointment = siteTitle;
+      const tempNewExpert = appointment;
+      const tempOldExpert = newExpert;
+      appointment = tempAppointment;
+      newExpert = tempNewExpert;
+      oldExpert = tempOldExpert;
+      siteTitle = await getSiteTitle(pool);
+    }
+
     // Validate and parse appointment date
     if (!appointment.appointment_date) {
       console.error('Appointment date is missing');
@@ -627,7 +709,7 @@ async function sendReassignmentNotificationToNewExpert(pool, appointment, newExp
       day: 'numeric'
     });
 
-    const subject = `Yeni Randevu Ataması - ${formattedDate}`;
+    const subject = `${siteTitle} - Yeni Randevu Ataması - ${formattedDate}`;
     const text = `
 Merhaba ${newExpert.name},
 
@@ -694,8 +776,20 @@ IT Randevu Sistemi
 /**
  * Send appointment reassignment notification to user
  */
-async function sendReassignmentNotificationToUser(pool, appointment, oldExpert, newExpert) {
+async function sendReassignmentNotificationToUser(pool, siteTitle, appointment, oldExpert, newExpert) {
   try {
+    // If siteTitle not provided, fetch from database (backward compatibility)
+    if (!siteTitle || typeof siteTitle === 'object') {
+      // siteTitle is actually appointment (old signature)
+      const tempAppointment = siteTitle;
+      const tempOldExpert = appointment;
+      const tempNewExpert = oldExpert;
+      appointment = tempAppointment;
+      oldExpert = tempOldExpert;
+      newExpert = tempNewExpert;
+      siteTitle = await getSiteTitle(pool);
+    }
+
     // Validate and parse appointment date
     if (!appointment.appointment_date) {
       console.error('Appointment date is missing');
@@ -722,7 +816,7 @@ async function sendReassignmentNotificationToUser(pool, appointment, oldExpert, 
       day: 'numeric'
     });
 
-    const subject = `Randevunuzun Atanan Uzmanı Değişti - ${formattedDate}`;
+    const subject = `${siteTitle} - Randevunuzun Atanan Uzmanı Değişti - ${formattedDate}`;
     const text = `
 Merhaba ${appointment.user_name},
 
@@ -809,6 +903,7 @@ IT Randevu Sistemi
 
 module.exports = {
   sendEmail,
+  getSiteTitle,
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
   sendAppointmentApprovalToExpert,

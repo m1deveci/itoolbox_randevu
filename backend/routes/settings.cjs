@@ -170,7 +170,7 @@ module.exports = (pool) => {
   // POST /api/settings/test-smtp - Test SMTP connection
   router.post('/test-smtp', async (req, res) => {
     try {
-      const { smtp_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name } = req.body;
+      const { smtp_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, testEmail } = req.body;
       const userId = req.headers['x-user-id'] || null;
       const userName = req.headers['x-user-name'] || 'System';
 
@@ -184,7 +184,7 @@ module.exports = (pool) => {
 
       // Try to connect to SMTP server
       const nodemailer = require('nodemailer');
-      
+
       const transporter = nodemailer.createTransport({
         host: smtp_host,
         port: parseInt(smtp_port) || 587,
@@ -201,16 +201,33 @@ module.exports = (pool) => {
       // Verify connection
       await transporter.verify();
 
+      // Fetch site title from database
+      let siteTitle = 'IT Randevu Sistemi';
+      try {
+        const [result] = await pool.execute(
+          'SELECT value FROM settings WHERE key_name = ?',
+          ['site_title']
+        );
+        if (result.length > 0) {
+          siteTitle = result[0].value || 'IT Randevu Sistemi';
+        }
+      } catch (error) {
+        console.error('Error fetching site title:', error);
+      }
+
+      // Determine test email recipient
+      const emailRecipient = testEmail || smtp_from_email;
+
       // Try to send a test email
-      const testEmail = {
+      const testEmailOptions = {
         from: `"${smtp_from_name || 'IT Randevu Sistemi'}" <${smtp_from_email}>`,
-        to: smtp_from_email, // Send test email to from_email address
-        subject: 'SMTP Test - IT Randevu Sistemi',
-        text: 'Bu bir test e-postasıdır. SMTP ayarlarınız doğru çalışıyor.',
-        html: '<p>Bu bir test e-postasıdır. SMTP ayarlarınız doğru çalışıyor.</p>'
+        to: emailRecipient,
+        subject: `${siteTitle} - SMTP Bağlantı Testi`,
+        text: `Merhaba,\n\nBu bir test e-postasıdır. SMTP ayarlarınız doğru şekilde yapılandırılmış ve çalışıyor.\n\n${siteTitle}`,
+        html: `<p>Merhaba,</p><p>Bu bir test e-postasıdır. SMTP ayarlarınız doğru şekilde yapılandırılmış ve çalışıyor.</p><p><strong>${siteTitle}</strong></p>`
       };
 
-      await transporter.sendMail(testEmail);
+      await transporter.sendMail(testEmailOptions);
 
       // Log activity
       await pool.execute(
@@ -221,15 +238,16 @@ module.exports = (pool) => {
           userName,
           'test_smtp',
           'settings',
-          JSON.stringify({ smtp_host, smtp_port, smtp_user, smtp_from_email }),
+          JSON.stringify({ smtp_host, smtp_port, smtp_user, smtp_from_email, test_email_recipient: emailRecipient }),
           req.ip || req.headers['x-forwarded-for'] || 'unknown',
           req.headers['user-agent'] || 'unknown'
         ]
       );
 
-      res.json({ 
-        message: 'SMTP bağlantısı başarıyla test edildi ve test e-postası gönderildi',
-        success: true
+      res.json({
+        message: `SMTP bağlantısı başarıyla test edildi ve test e-postası ${emailRecipient} adresine gönderildi`,
+        success: true,
+        sentTo: emailRecipient
       });
     } catch (error) {
       console.error('Error testing SMTP:', error);

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getSiteTitle,
   sendAppointmentNotificationToExpert,
   sendAppointmentApprovalToUser,
   sendAppointmentApprovalToExpert,
@@ -461,8 +462,22 @@ module.exports = (pool) => {
         // Don't fail the request if logging fails
       }
 
+      // Fetch site title for emails
+      let siteTitle = 'IT Randevu Sistemi';
+      try {
+        const [result] = await pool.execute(
+          'SELECT value FROM settings WHERE key_name = ?',
+          ['site_title']
+        );
+        if (result.length > 0) {
+          siteTitle = result[0].value || 'IT Randevu Sistemi';
+        }
+      } catch (error) {
+        console.error('Error fetching site title:', error);
+      }
+
       // Send email notification to user (async, don't wait for it)
-      sendAppointmentApprovalToUser(pool, appointment, {
+      sendAppointmentApprovalToUser(pool, siteTitle, appointment, {
         name: appointment.expert_name,
         email: appointment.expert_email || ''
       }).catch(error => {
@@ -470,7 +485,7 @@ module.exports = (pool) => {
       });
 
       // Send email notification to expert (async, don't wait for it)
-      sendAppointmentApprovalToExpert(pool, appointment, {
+      sendAppointmentApprovalToExpert(pool, siteTitle, appointment, {
         name: appointment.expert_name,
         email: appointment.expert_email || ''
       }).catch(error => {

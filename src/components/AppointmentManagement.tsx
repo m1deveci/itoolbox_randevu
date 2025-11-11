@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2, Edit } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Edit, Download } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx';
 
 interface Appointment {
   id: string;
@@ -13,7 +14,7 @@ interface Appointment {
   expertId: number;
   date: string;
   time: string;
-  status: 'pending' | 'approved' | 'cancelled';
+  status: 'pending' | 'approved' | 'cancelled' | 'completed';
 }
 
 interface Expert {
@@ -517,6 +518,62 @@ export function AppointmentManagement({ adminUser }: Props) {
     }
   };
 
+  const exportToExcel = (appointmentsToExport: Appointment[], fileName: string) => {
+    if (appointmentsToExport.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Dışa Aktar',
+        text: 'Dışa aktarılacak randevu bulunamadı',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    const data = appointmentsToExport.map(apt => ({
+      'Çalışan Adı': apt.userName,
+      'E-posta': apt.userEmail,
+      'Telefon': apt.userPhone,
+      'Ticket No': apt.ticketNo || '-',
+      'Uzman': apt.expertName,
+      'Tarih': apt.date,
+      'Saat': apt.time,
+      'Durum': (() => {
+        switch (apt.status) {
+          case 'pending':
+            return 'Beklemede';
+          case 'approved':
+            return 'Onaylı';
+          case 'cancelled':
+            return 'İptal Edildi';
+          case 'completed':
+            return 'Tamamlandı';
+          default:
+            return apt.status;
+        }
+      })()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Randevular');
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 20 }, // Çalışan Adı
+      { wch: 25 }, // E-posta
+      { wch: 15 }, // Telefon
+      { wch: 15 }, // Ticket No
+      { wch: 15 }, // Uzman
+      { wch: 12 }, // Tarih
+      { wch: 10 }, // Saat
+      { wch: 12 }  // Durum
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `${fileName}_${today}.xlsx`);
+  };
+
   // Filter by status and expert
   const filteredByStatusAndExpert = (() => {
     let result = appointments;
@@ -592,6 +649,19 @@ export function AppointmentManagement({ adminUser }: Props) {
             {label}
           </button>
         ))}
+      </div>
+
+      {/* Export Buttons */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={() => exportToExcel(sortedAppointments, 'Tüm_Randevular')}
+          className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-500 text-white rounded text-xs sm:text-sm font-medium hover:bg-green-600 transition"
+          title="Mevcut filtreye göre tüm randevuları Excel'e aktar"
+        >
+          <Download size={16} />
+          <span className="hidden sm:inline">Excel'e Aktar</span>
+          <span className="sm:hidden">Export</span>
+        </button>
       </div>
 
       {/* Search Filter */}

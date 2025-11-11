@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Star, TrendingUp } from 'lucide-react';
+import { Star, TrendingUp, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface Survey {
   id: number;
@@ -67,6 +68,46 @@ export function SurveyResults() {
         ))}
       </div>
     );
+  };
+
+  const exportSurveysToExcel = () => {
+    if (filteredSurveys.length === 0) {
+      alert('Dışa aktarılacak anket sonucu bulunamadı');
+      return;
+    }
+
+    const data = filteredSurveys.map(survey => ({
+      'Kullanıcı Adı': survey.user_name,
+      'E-posta': survey.user_email,
+      'Randevu Tarihi': survey.appointment_date,
+      'Randevu Saati': survey.appointment_time,
+      'Ticket No': survey.ticket_no,
+      'Hizmet Puanı': survey.service_satisfaction,
+      'Sistem Puanı': survey.system_satisfaction,
+      'Sorun Açıklaması': survey.problem_description || '-',
+      'Anket Tarihi': new Date(survey.created_at).toLocaleDateString('tr-TR')
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Anketler');
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 20 }, // Kullanıcı Adı
+      { wch: 25 }, // E-posta
+      { wch: 15 }, // Randevu Tarihi
+      { wch: 15 }, // Randevu Saati
+      { wch: 15 }, // Ticket No
+      { wch: 12 }, // Hizmet Puanı
+      { wch: 12 }, // Sistem Puanı
+      { wch: 30 }, // Sorun Açıklaması
+      { wch: 15 }  // Anket Tarihi
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `Anket_Sonuçları_${today}.xlsx`);
   };
 
   const filteredSurveys = filterRating === 0
@@ -163,6 +204,18 @@ export function SurveyResults() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Export Button */}
+      <div className="mb-4">
+        <button
+          onClick={exportSurveysToExcel}
+          className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition"
+          title="Filtrelenen anket sonuçlarını Excel'e aktar"
+        >
+          <Download size={16} />
+          Excel'e Aktar
+        </button>
       </div>
 
       {/* Surveys Table */}

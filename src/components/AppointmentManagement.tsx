@@ -40,6 +40,9 @@ export function AppointmentManagement({ adminUser }: Props) {
   const [superadminExperts, setSuperadminExperts] = useState<Expert[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Load experts on mount
   useEffect(() => {
@@ -419,19 +422,54 @@ export function AppointmentManagement({ adminUser }: Props) {
     }
   };
 
-  const filteredAppointments = (() => {
-    if (filter === 'all') {
-      return appointments;
-    } else if (filter === 'my') {
-      // Already filtered in loadAppointments, but filter again for safety
-      if (adminUser) {
-        return appointments.filter(a => a.expertId === adminUser.id);
-      }
-      return appointments;
-    } else {
-      return appointments.filter(a => a.status === filter);
+  // Filter by status and expert
+  const filteredByStatusAndExpert = (() => {
+    let result = appointments;
+
+    if (filter === 'my' && adminUser) {
+      result = result.filter(a => a.expertId === adminUser.id);
+    } else if (filter !== 'all') {
+      result = result.filter(a => a.status === filter);
     }
+
+    return result;
   })();
+
+  // Filter by search query
+  const searchFilteredAppointments = filteredByStatusAndExpert.filter(a => {
+    const query = searchQuery.toLowerCase();
+    return (
+      a.userName.toLowerCase().includes(query) ||
+      a.userEmail.toLowerCase().includes(query) ||
+      a.userPhone.includes(query) ||
+      a.ticketNo?.toLowerCase().includes(query) ||
+      a.expertName.toLowerCase().includes(query)
+    );
+  });
+
+  // Sort by date and time (closest to furthest from now)
+  const now = new Date();
+  const sortedAppointments = [...searchFilteredAppointments].sort((a, b) => {
+    const aDateTime = new Date(a.date + 'T' + a.time);
+    const bDateTime = new Date(b.date + 'T' + b.time);
+
+    // Calculate distance from now
+    const aDistance = Math.abs(aDateTime.getTime() - now.getTime());
+    const bDistance = Math.abs(bDateTime.getTime() - now.getTime());
+
+    return aDistance - bDistance;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedAppointments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAppointments = sortedAppointments.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -460,17 +498,28 @@ export function AppointmentManagement({ adminUser }: Props) {
         ))}
       </div>
 
+      {/* Search Filter */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Çalışan adı, email, telefon, ticket no veya uzman adı ile ara..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+        />
+      </div>
+
       {/* Appointments Table - Mobile Card View on Small Screens */}
 
       {loading && (
         <div className="text-center py-8 text-gray-500">Yükleniyor...</div>
       )}
 
-      {!loading && filteredAppointments.length === 0 && (
+      {!loading && sortedAppointments.length === 0 && (
         <div className="text-center py-8 text-gray-500 bg-white rounded-lg">Randevu bulunamadı</div>
       )}
 
-      {!loading && filteredAppointments.length > 0 && (
+      {!loading && sortedAppointments.length > 0 && (
         <>
           {/* Desktop Table */}
           <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
@@ -489,7 +538,7 @@ export function AppointmentManagement({ adminUser }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAppointments.map((apt) => (
+                  {paginatedAppointments.map((apt) => (
                     <tr key={apt.id} className="border-t hover:bg-gray-50">
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.userName}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userPhone}</td>
@@ -556,7 +605,7 @@ export function AppointmentManagement({ adminUser }: Props) {
 
           {/* Mobile Card View */}
           <div className="md:hidden space-y-3">
-            {filteredAppointments.map((apt) => (
+            {paginatedAppointments.map((apt) => (
               <div key={apt.id} className="bg-white rounded-lg shadow p-4 space-y-3">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
@@ -619,6 +668,47 @@ export function AppointmentManagement({ adminUser }: Props) {
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-6 p-4">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 rounded text-sm font-medium bg-gray-200 text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 transition"
+              >
+                ← Önceki
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-2 rounded text-sm font-medium transition ${
+                    currentPage === page
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 rounded text-sm font-medium bg-gray-200 text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 transition"
+              >
+                Sonraki →
+              </button>
+
+              <div className="w-full flex justify-center mt-2">
+                <span className="text-sm text-gray-600">
+                  Sayfa {currentPage} / {totalPages} (Toplam: {sortedAppointments.length} randevu)
+                </span>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

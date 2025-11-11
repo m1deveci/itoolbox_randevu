@@ -105,12 +105,12 @@ export function SurveyResults() {
               <p className="text-sm text-gray-600">Telefon Değişim Hizmetinden Memnuniyet</p>
               <div className="flex items-center gap-3">
                 <p className="text-3xl font-bold text-yellow-500">
-                  {statistics.avg_service_satisfaction.toFixed(1)}
+                  {statistics.avg_service_satisfaction ? statistics.avg_service_satisfaction.toFixed(1) : '0.0'}
                 </p>
                 <span className="text-gray-600">/5.0</span>
               </div>
               <div className="flex gap-1">
-                {renderStars(Math.round(statistics.avg_service_satisfaction))}
+                {renderStars(statistics.avg_service_satisfaction ? Math.round(statistics.avg_service_satisfaction) : 0)}
               </div>
             </div>
           </div>
@@ -121,12 +121,12 @@ export function SurveyResults() {
               <p className="text-sm text-gray-600">Randevu Sisteminden Memnuniyet</p>
               <div className="flex items-center gap-3">
                 <p className="text-3xl font-bold text-yellow-500">
-                  {statistics.avg_system_satisfaction.toFixed(1)}
+                  {statistics.avg_system_satisfaction ? statistics.avg_system_satisfaction.toFixed(1) : '0.0'}
                 </p>
                 <span className="text-gray-600">/5.0</span>
               </div>
               <div className="flex gap-1">
-                {renderStars(Math.round(statistics.avg_system_satisfaction))}
+                {renderStars(statistics.avg_system_satisfaction ? Math.round(statistics.avg_system_satisfaction) : 0)}
               </div>
             </div>
           </div>

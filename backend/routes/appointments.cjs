@@ -408,12 +408,15 @@ module.exports = (pool) => {
       const appointmentId = parseInt(req.params.id);
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
       const userName = req.headers['x-user-name'] || 'System';
-      
+
       // Get appointment details before update
       const [appointments] = await pool.execute(
-        `SELECT a.*, e.name as expert_name, e.email as expert_email
-         FROM appointments a 
-         JOIN experts e ON a.expert_id = e.id 
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                e.name as expert_name, e.email as expert_email
+         FROM appointments a
+         JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );
@@ -514,7 +517,10 @@ module.exports = (pool) => {
 
       // Get appointment details
       const [appointments] = await pool.execute(
-        `SELECT a.*, e.name as old_expert_name, e.email as old_expert_email
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                e.name as old_expert_name, e.email as old_expert_email
          FROM appointments a
          JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
@@ -666,9 +672,12 @@ module.exports = (pool) => {
 
       // Get appointment details before update
       const [appointments] = await pool.execute(
-        `SELECT a.*, e.name as expert_name, e.email as expert_email
-         FROM appointments a 
-         JOIN experts e ON a.expert_id = e.id 
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                e.name as expert_name, e.email as expert_email
+         FROM appointments a
+         JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );

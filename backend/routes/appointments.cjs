@@ -25,7 +25,14 @@ module.exports = (pool) => {
 
       let query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-               a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
+               a.appointment_time as time,
+               CASE
+                 WHEN a.status = 'pending' THEN 'pending'
+                 WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
+                 WHEN a.status = 'approved' THEN 'approved'
+                 ELSE a.status
+               END as status,
+               a.notes, a.cancellation_reason,
                e.name as expert_name, a.created_at
         FROM appointments a
         JOIN experts e ON a.expert_id = e.id
@@ -225,7 +232,14 @@ module.exports = (pool) => {
 
       const query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-               a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
+               a.appointment_time as time,
+               CASE
+                 WHEN a.status = 'pending' THEN 'pending'
+                 WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
+                 WHEN a.status = 'approved' THEN 'approved'
+                 ELSE a.status
+               END as status,
+               a.notes, a.cancellation_reason,
                e.name as expert_name, a.created_at
         FROM appointments a
         JOIN experts e ON a.expert_id = e.id
@@ -247,7 +261,14 @@ module.exports = (pool) => {
     try {
       const [appointments] = await pool.execute(
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-                a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
+                a.appointment_time as time,
+                CASE
+                  WHEN a.status = 'pending' THEN 'pending'
+                  WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
+                  WHEN a.status = 'approved' THEN 'approved'
+                  ELSE a.status
+                END as status,
+                a.notes, a.cancellation_reason,
                 e.name as expert_name, a.created_at
          FROM appointments a
          JOIN experts e ON a.expert_id = e.id

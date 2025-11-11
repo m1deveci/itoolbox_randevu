@@ -27,16 +27,11 @@ module.exports = (pool) => {
       let query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                a.appointment_time as time,
-               CASE
-                 WHEN a.status = 'pending' THEN 'pending'
-                 WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
-                 WHEN a.status = 'approved' THEN 'approved'
-                 ELSE a.status
-               END as status,
+               a.status,
                a.notes, a.cancellation_reason,
-               e.name as expert_name, a.created_at
+               COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
         FROM appointments a
-        JOIN experts e ON a.expert_id = e.id
+        LEFT JOIN experts e ON a.expert_id = e.id
         WHERE 1=1
       `;
       const params = [];
@@ -61,6 +56,11 @@ module.exports = (pool) => {
       params.push(parseInt(limit), offset);
 
       const [appointments] = await pool.execute(query, params);
+      
+      // Debug logging
+      console.log('Appointments query:', query.substring(0, 200));
+      console.log('Query params:', params);
+      console.log('Found appointments:', appointments.length);
 
       // Get total count for pagination
       let countQuery = 'SELECT COUNT(*) as total FROM appointments WHERE 1=1';
@@ -234,16 +234,11 @@ module.exports = (pool) => {
       const query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                a.appointment_time as time,
-               CASE
-                 WHEN a.status = 'pending' THEN 'pending'
-                 WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
-                 WHEN a.status = 'approved' THEN 'approved'
-                 ELSE a.status
-               END as status,
+               a.status,
                a.notes, a.cancellation_reason,
-               e.name as expert_name, a.created_at
+               COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
         FROM appointments a
-        JOIN experts e ON a.expert_id = e.id
+        LEFT JOIN experts e ON a.expert_id = e.id
         WHERE a.user_email = ?
         ORDER BY a.appointment_date DESC, a.appointment_time DESC
       `;
@@ -263,16 +258,11 @@ module.exports = (pool) => {
       const [appointments] = await pool.execute(
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                 a.appointment_time as time,
-                CASE
-                  WHEN a.status = 'pending' THEN 'pending'
-                  WHEN a.status = 'approved' AND CONCAT(a.appointment_date, ' ', a.appointment_time) < NOW() THEN 'completed'
-                  WHEN a.status = 'approved' THEN 'approved'
-                  ELSE a.status
-                END as status,
+                a.status,
                 a.notes, a.cancellation_reason,
-                e.name as expert_name, a.created_at
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [req.params.id]
       );
@@ -436,9 +426,9 @@ module.exports = (pool) => {
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
                 a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
-                e.name as expert_name, e.email as expert_email
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );
@@ -542,9 +532,9 @@ module.exports = (pool) => {
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
                 a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
-                e.name as old_expert_name, e.email as old_expert_email
+                COALESCE(e.name, 'Bilinmeyen Uzman') as old_expert_name, e.email as old_expert_email
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );
@@ -697,9 +687,9 @@ module.exports = (pool) => {
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
                 a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
-                e.name as expert_name, e.email as expert_email
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );
@@ -791,9 +781,9 @@ module.exports = (pool) => {
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
                 a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
-                e.name as expert_name, e.email as expert_email
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );
@@ -833,9 +823,9 @@ module.exports = (pool) => {
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
                 a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
-                e.name as expert_name, e.email as expert_email
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
          FROM appointments a
-         JOIN experts e ON a.expert_id = e.id
+         LEFT JOIN experts e ON a.expert_id = e.id
          WHERE a.id = ?`,
         [appointmentId]
       );

@@ -56,8 +56,8 @@ export function AppointmentManagement({ adminUser }: Props) {
   // Check URL params for initial filter
   useEffect(() => {
     const urlFilter = searchParams.get('filter');
-    if (urlFilter && ['all', 'pending', 'approved', 'cancelled', 'my'].includes(urlFilter)) {
-      setFilter(urlFilter as 'all' | 'pending' | 'approved' | 'cancelled' | 'my');
+    if (urlFilter && ['all', 'pending', 'approved', 'cancelled', 'my', 'completed'].includes(urlFilter)) {
+      setFilter(urlFilter as 'all' | 'pending' | 'approved' | 'cancelled' | 'my' | 'completed');
     }
   }, [searchParams]);
 
@@ -95,11 +95,7 @@ export function AppointmentManagement({ adminUser }: Props) {
       
       // adminUser.id is the same as expert_id in randevu database
       const expertId = adminUser?.id;
-      
-      // If user is not superadmin, only show their own appointments
-      if (adminUser && adminUser.role !== 'superadmin' && expertId) {
-        params.append('expertId', expertId.toString());
-      }
+      const isSuperadmin = adminUser?.role === 'superadmin';
       
       // If filter is 'my', show only current user's appointments
       if (filter === 'my' && adminUser && expertId) {
@@ -107,12 +103,40 @@ export function AppointmentManagement({ adminUser }: Props) {
       } else if (filter !== 'all' && filter !== 'my') {
         params.append('status', filter);
       }
+      
+      // If user is not superadmin, always filter by their expertId (security)
+      // Superadmin can see all appointments when filter='all'
+      if (!isSuperadmin && expertId) {
+        params.append('expertId', expertId.toString());
+      }
 
-      const response = await fetch(`/api/appointments?${params.toString()}`);
+      const response = await fetch(`/api/appointments?${params.toString()}&limit=1000`);
       if (!response.ok) throw new Error('Failed to fetch appointments');
       const data = await response.json();
+      
+      // Debug: Log received appointments
+      console.log('=== Appointment Loading Debug ===');
+      console.log('Filter:', filter);
+      console.log('Is Superadmin:', isSuperadmin);
+      console.log('Current Expert ID:', expertId);
+      console.log('Admin User:', { id: adminUser?.id, name: adminUser?.name, role: adminUser?.role });
+      console.log('API Params:', params.toString());
+      console.log('Loaded appointments:', data.appointments?.length || 0, 'total');
+      console.log('Appointment IDs:', data.appointments?.map((a: any) => ({ id: a.id, expert_id: a.expert_id, user_name: a.user_name, status: a.status })));
+      console.log('================================');
 
-      let mappedAppointments = data.appointments.map((a: any) => ({
+      let mappedAppointments = data.appointments.map((a: {
+        id: number;
+        user_name: string;
+        user_email: string;
+        user_phone: string;
+        ticket_no?: string;
+        expert_name: string;
+        expert_id: number;
+        date: string;
+        time: string;
+        status: string;
+      }) => ({
         id: a.id.toString(),
         userName: a.user_name,
         userEmail: a.user_email,
@@ -755,40 +779,23 @@ export function AppointmentManagement({ adminUser }: Props) {
                         )}
                         {apt.status === 'approved' && (
                           <>
-                            {/* Check if appointment time has passed */}
-                            {(() => {
-                              const now = new Date();
-                              const aptDateTime = new Date(apt.date + 'T' + apt.time);
-                              return aptDateTime < now ? (
-                                <button
-                                  onClick={() => changeStatusDirect(apt.id, 'completed')}
-                                  className="text-xs sm:text-sm text-green-600 hover:text-green-800 font-semibold hover:bg-green-50 px-2 py-1 rounded"
-                                  title="Tamamla"
-                                >
-                                  ✓ Tamamla
-                                </button>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => handleRemindAppointment(apt.id)}
-                                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded"
-                                    title="Hatırlat"
-                                  >
-                                    🔔
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedAppointmentForStatus(apt);
-                                      setShowStatusModal(true);
-                                    }}
-                                    className="text-xs sm:text-sm text-orange-600 hover:text-orange-800 font-semibold hover:bg-orange-50 px-2 py-1 rounded"
-                                    title="Durum Değiştir"
-                                  >
-                                    ⚙️
-                                  </button>
-                                </>
-                              );
-                            })()}
+                            <button
+                              onClick={() => handleRemindAppointment(apt.id)}
+                              className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded"
+                              title="Hatırlat"
+                            >
+                              🔔
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedAppointmentForStatus(apt);
+                                setShowStatusModal(true);
+                              }}
+                              className="text-xs sm:text-sm text-orange-600 hover:text-orange-800 font-semibold hover:bg-orange-50 px-2 py-1 rounded"
+                              title="Durum Değiştir"
+                            >
+                              ⚙️
+                            </button>
                           </>
                         )}
                         {apt.status === 'cancelled' && (
@@ -864,36 +871,21 @@ export function AppointmentManagement({ adminUser }: Props) {
 
                 {apt.status === 'approved' && (
                   <div className="flex gap-2 pt-2">
-                    {(() => {
-                      const now = new Date();
-                      const aptDateTime = new Date(apt.date + 'T' + apt.time);
-                      return aptDateTime < now ? (
-                        <button
-                          onClick={() => changeStatusDirect(apt.id, 'completed')}
-                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-semibold py-2 rounded transition"
-                        >
-                          ✓ Tamamla
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleRemindAppointment(apt.id)}
-                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
-                          >
-                            🔔 Hatırlat
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedAppointmentForStatus(apt);
-                              setShowStatusModal(true);
-                            }}
-                            className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-semibold py-2 rounded transition"
-                          >
-                            ⚙️ Durum
-                          </button>
-                        </>
-                      );
-                    })()}
+                    <button
+                      onClick={() => handleRemindAppointment(apt.id)}
+                      className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
+                    >
+                      🔔 Hatırlat
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedAppointmentForStatus(apt);
+                        setShowStatusModal(true);
+                      }}
+                      className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-semibold py-2 rounded transition"
+                    >
+                      ⚙️ Durum
+                    </button>
                   </div>
                 )}
 

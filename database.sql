@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   appointment_date DATE NOT NULL,
   appointment_time TIME NOT NULL,
   ticket_no VARCHAR(20) DEFAULT NULL,
-  status ENUM('pending', 'approved', 'cancelled') DEFAULT 'pending',
+  status ENUM('pending', 'approved', 'cancelled', 'completed') DEFAULT 'pending',
   notes TEXT,
   cancellation_reason TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,4 +59,20 @@ CREATE TABLE IF NOT EXISTS appointment_locks (
   UNIQUE KEY uk_expert_slot (expert_id, appointment_date, appointment_time, session_id),
   INDEX idx_session (session_id),
   INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create appointment_surveys table (survey responses for completed appointments)
+CREATE TABLE IF NOT EXISTS appointment_surveys (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  appointment_id INT NOT NULL,
+  user_email VARCHAR(255) NOT NULL,
+  service_satisfaction TINYINT NOT NULL CHECK (service_satisfaction >= 1 AND service_satisfaction <= 5),
+  system_satisfaction TINYINT NOT NULL CHECK (system_satisfaction >= 1 AND system_satisfaction <= 5),
+  problem_description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_appointment_survey (appointment_id),
+  INDEX idx_user_email (user_email),
+  INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

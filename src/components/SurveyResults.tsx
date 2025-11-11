@@ -40,15 +40,29 @@ export function SurveyResults() {
         fetch('/api/surveys/stats/summary')
       ]);
 
+      console.log('=== Survey Loading Debug ===');
+      console.log('Surveys response status:', surveysRes.status, surveysRes.ok);
+      console.log('Stats response status:', statsRes.status, statsRes.ok);
+
       if (surveysRes.ok) {
         const data = await surveysRes.json();
+        console.log('Surveys data:', data);
+        console.log('Surveys count:', data.surveys?.length || 0);
         setSurveys(data.surveys || []);
+      } else {
+        const errorText = await surveysRes.text();
+        console.error('Surveys API error:', errorText);
       }
 
       if (statsRes.ok) {
         const data = await statsRes.json();
+        console.log('Stats data:', data);
         setStatistics(data.statistics);
+      } else {
+        const errorText = await statsRes.text();
+        console.error('Stats API error:', errorText);
       }
+      console.log('===========================');
     } catch (error) {
       console.error('Error loading surveys:', error);
     } finally {
@@ -146,12 +160,20 @@ export function SurveyResults() {
               <p className="text-sm text-gray-600">Telefon Değişim Hizmetinden Memnuniyet</p>
               <div className="flex items-center gap-3">
                 <p className="text-3xl font-bold text-yellow-500">
-                  {statistics.avg_service_satisfaction ? statistics.avg_service_satisfaction.toFixed(1) : '0.0'}
+                  {statistics.avg_service_satisfaction 
+                    ? (typeof statistics.avg_service_satisfaction === 'number' 
+                        ? statistics.avg_service_satisfaction.toFixed(1) 
+                        : parseFloat(statistics.avg_service_satisfaction).toFixed(1))
+                    : '0.0'}
                 </p>
                 <span className="text-gray-600">/5.0</span>
               </div>
               <div className="flex gap-1">
-                {renderStars(statistics.avg_service_satisfaction ? Math.round(statistics.avg_service_satisfaction) : 0)}
+                {renderStars(statistics.avg_service_satisfaction 
+                  ? Math.round(typeof statistics.avg_service_satisfaction === 'number' 
+                      ? statistics.avg_service_satisfaction 
+                      : parseFloat(statistics.avg_service_satisfaction))
+                  : 0)}
               </div>
             </div>
           </div>
@@ -162,12 +184,20 @@ export function SurveyResults() {
               <p className="text-sm text-gray-600">Randevu Sisteminden Memnuniyet</p>
               <div className="flex items-center gap-3">
                 <p className="text-3xl font-bold text-yellow-500">
-                  {statistics.avg_system_satisfaction ? statistics.avg_system_satisfaction.toFixed(1) : '0.0'}
+                  {statistics.avg_system_satisfaction 
+                    ? (typeof statistics.avg_system_satisfaction === 'number' 
+                        ? statistics.avg_system_satisfaction.toFixed(1) 
+                        : parseFloat(statistics.avg_system_satisfaction).toFixed(1))
+                    : '0.0'}
                 </p>
                 <span className="text-gray-600">/5.0</span>
               </div>
               <div className="flex gap-1">
-                {renderStars(statistics.avg_system_satisfaction ? Math.round(statistics.avg_system_satisfaction) : 0)}
+                {renderStars(statistics.avg_system_satisfaction 
+                  ? Math.round(typeof statistics.avg_system_satisfaction === 'number' 
+                      ? statistics.avg_system_satisfaction 
+                      : parseFloat(statistics.avg_system_satisfaction))
+                  : 0)}
               </div>
             </div>
           </div>

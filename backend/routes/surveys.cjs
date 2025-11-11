@@ -24,8 +24,8 @@ module.exports = (pool) => {
       // Get appointment details to verify it exists and get user email
       const [appointments] = await pool.execute(
         `SELECT a.id, a.user_email, a.user_name
-         FROM appointments
-         WHERE id = ?`,
+         FROM appointments a
+         WHERE a.id = ?`,
         [appointmentId]
       );
 
@@ -65,7 +65,10 @@ module.exports = (pool) => {
       });
     } catch (error) {
       console.error('Error submitting survey:', error);
-      res.status(500).json({ error: 'Anket kaydedilirken bir hata oluştu' });
+      res.status(500).json({ 
+        error: 'Anket kaydedilirken bir hata oluştu',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
@@ -75,14 +78,17 @@ module.exports = (pool) => {
       const [surveys] = await pool.execute(
         `SELECT s.id, s.appointment_id, s.user_email, s.service_satisfaction,
                 s.system_satisfaction, s.problem_description, s.created_at,
-                a.user_name, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date,
+                COALESCE(a.user_name, 'Bilinmeyen Kullanıcı') as user_name, 
+                a.ticket_no, 
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date,
                 a.appointment_time
          FROM appointment_surveys s
-         JOIN appointments a ON s.appointment_id = a.id
+         LEFT JOIN appointments a ON s.appointment_id = a.id
          ORDER BY s.created_at DESC
          LIMIT 100`
       );
 
+      console.log('Surveys query result:', surveys.length, 'surveys found');
       res.json({ surveys });
     } catch (error) {
       console.error('Error fetching surveys:', error);
@@ -120,7 +126,20 @@ module.exports = (pool) => {
          FROM appointment_surveys`
       );
 
-      res.json({ statistics: stats[0] });
+      const statistics = stats[0];
+      
+      // Convert string numbers to actual numbers
+      const result = {
+        total_surveys: parseInt(statistics.total_surveys) || 0,
+        avg_service_satisfaction: statistics.avg_service_satisfaction 
+          ? parseFloat(statistics.avg_service_satisfaction) 
+          : 0,
+        avg_system_satisfaction: statistics.avg_system_satisfaction 
+          ? parseFloat(statistics.avg_system_satisfaction) 
+          : 0
+      };
+
+      res.json({ statistics: result });
     } catch (error) {
       console.error('Error fetching survey stats:', error);
       res.status(500).json({ error: 'İstatistikler yüklenirken bir hata oluştu' });

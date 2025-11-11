@@ -122,7 +122,7 @@ export function AppointmentManagement({ adminUser }: Props) {
         expertId: a.expert_id,
         date: a.date.split('T')[0],
         time: a.time.substring(0, 5),
-        status: a.status as 'pending' | 'approved' | 'cancelled'
+        status: a.status as 'pending' | 'approved' | 'cancelled' | 'completed'
       }));
 
       // If filter is 'my', filter by expert ID client-side as well
@@ -716,12 +716,14 @@ export function AppointmentManagement({ adminUser }: Props) {
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                           apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                           apt.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          apt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
                           'bg-red-100 text-red-800'
                         }`}>
                           {apt.status === 'pending' && <Clock className="w-3 h-3" />}
                           {apt.status === 'approved' && <CheckCircle className="w-3 h-3" />}
+                          {apt.status === 'completed' && <CheckCircle className="w-3 h-3" />}
                           {apt.status === 'cancelled' && <XCircle className="w-3 h-3" />}
-                          <span className="hidden sm:inline">{apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : 'İptal'}</span>
+                          <span className="hidden sm:inline">{apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : apt.status === 'completed' ? 'Tamamlandı' : 'İptal'}</span>
                         </span>
                       </td>
                       <td className="px-4 lg:px-6 py-3 space-x-1 sm:space-x-2">
@@ -825,12 +827,14 @@ export function AppointmentManagement({ adminUser }: Props) {
                   <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                     apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                     apt.status === 'approved' ? 'bg-green-100 text-green-800' :
+                    apt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
                     'bg-red-100 text-red-800'
                   }`}>
                     {apt.status === 'pending' && <Clock className="w-3 h-3" />}
                     {apt.status === 'approved' && <CheckCircle className="w-3 h-3" />}
+                    {apt.status === 'completed' && <CheckCircle className="w-3 h-3" />}
                     {apt.status === 'cancelled' && <XCircle className="w-3 h-3" />}
-                    {apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : 'İptal'}
+                    {apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : apt.status === 'completed' ? 'Tamamlandı' : 'İptal'}
                   </span>
                 </div>
 
@@ -855,6 +859,41 @@ export function AppointmentManagement({ adminUser }: Props) {
                       <Edit className="w-4 h-4" />
                       Atama
                     </button>
+                  </div>
+                )}
+
+                {apt.status === 'approved' && (
+                  <div className="flex gap-2 pt-2">
+                    {(() => {
+                      const now = new Date();
+                      const aptDateTime = new Date(apt.date + 'T' + apt.time);
+                      return aptDateTime < now ? (
+                        <button
+                          onClick={() => changeStatusDirect(apt.id, 'completed')}
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-semibold py-2 rounded transition"
+                        >
+                          ✓ Tamamla
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleRemindAppointment(apt.id)}
+                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
+                          >
+                            🔔 Hatırlat
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAppointmentForStatus(apt);
+                              setShowStatusModal(true);
+                            }}
+                            className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-semibold py-2 rounded transition"
+                          >
+                            ⚙️ Durum
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

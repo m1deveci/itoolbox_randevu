@@ -759,5 +759,138 @@ module.exports = (pool) => {
     }
   });
 
+  // POST /api/appointments/:id/remind - Send reminder email
+  router.post('/:id/remind', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+
+      // Get appointment details
+      const [appointments] = await pool.execute(
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                e.name as expert_name, e.email as expert_email
+         FROM appointments a
+         JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      const appointment = appointments[0];
+
+      // Send reminder email to user
+      sendAppointmentApprovalToUser(pool, appointment, { name: appointment.expert_name }).catch(error => {
+        console.error('Error sending reminder email:', error);
+      });
+
+      res.json({ message: 'Reminder email sent successfully' });
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      res.status(500).json({ error: 'Failed to send reminder' });
+    }
+  });
+
+  // PUT /api/appointments/:id/change-status - Change appointment status (completed/cancelled)
+  router.put('/:id/change-status', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      const { status: newStatus, cancellationReason } = req.body;
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] || 'System';
+
+      if (!['completed', 'cancelled'].includes(newStatus)) {
+        return res.status(400).json({ error: 'Invalid status. Must be completed or cancelled' });
+      }
+
+      // Get appointment details before update
+      const [appointments] = await pool.execute(
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                e.name as expert_name, e.email as expert_email
+         FROM appointments a
+         JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      const appointment = appointments[0];
+
+      // Update appointment status
+      const updateQuery = newStatus === 'cancelled'
+        ? 'UPDATE appointments SET status = ?, cancellation_reason = ? WHERE id = ?'
+        : 'UPDATE appointments SET status = ? WHERE id = ?';
+
+      const updateParams = newStatus === 'cancelled'
+        ? ['cancelled', cancellationReason || '', appointmentId]
+        : ['completed', appointmentId];
+
+      const [result] = await pool.execute(updateQuery, updateParams);
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      // If cancelled, send cancellation email and clear availability
+      if (newStatus === 'cancelled') {
+        // Send cancellation email to user
+        sendAppointmentCancellationToUser(pool, appointment, { name: appointment.expert_name }, cancellationReason).catch(error => {
+          console.error('Error sending cancellation email:', error);
+        });
+
+        // Clear the time slot from expert's availability
+        try {
+          await pool.execute(
+            `DELETE FROM availability
+             WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
+            [appointment.expert_id, appointment.appointment_date, appointment.appointment_time]
+          );
+        } catch (error) {
+          console.error('Error clearing availability:', error);
+        }
+      }
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            `change_status_to_${newStatus}`,
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_status: appointment.status,
+              new_status: newStatus,
+              expert_id: appointment.expert_id,
+              user_email: appointment.user_email,
+              cancellation_reason: cancellationReason || null
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (error) {
+        console.error('Error logging activity:', error);
+      }
+
+      res.json({ message: `Appointment status changed to ${newStatus}` });
+    } catch (error) {
+      console.error('Error changing appointment status:', error);
+      res.status(500).json({ error: 'Failed to change appointment status' });
+    }
+  });
+
   return router;
 };

@@ -38,11 +38,13 @@ export function AppointmentManagement({ adminUser }: Props) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [experts, setExperts] = useState<Expert[]>([]);
   const [superadminExperts, setSuperadminExperts] = useState<Expert[]>([]);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my'>('my');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'cancelled' | 'my' | 'completed'>('my');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedAppointmentForStatus, setSelectedAppointmentForStatus] = useState<Appointment | null>(null);
 
   // Load experts on mount
   useEffect(() => {
@@ -254,6 +256,99 @@ export function AppointmentManagement({ adminUser }: Props) {
         icon: 'error',
         title: 'Hata',
         text: 'Randevu silinirken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
+  const handleRemindAppointment = async (id: string) => {
+    try {
+      const response = await fetch(`/api/appointments/${id}/remind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) throw new Error('Failed to send reminder');
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Hatırlama E-postası Gönderildi',
+        text: 'Çalışana hatırlama e-postası başarıyla gönderildi.',
+        confirmButtonColor: '#3b82f6'
+      });
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Hatırlama e-postası gönderilirken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
+  const handleChangeStatus = async (newStatus: string) => {
+    if (!selectedAppointmentForStatus) return;
+
+    const appointmentId = selectedAppointmentForStatus.id;
+    let cancellationReason = '';
+
+    // If changing to cancelled, ask for reason
+    if (newStatus === 'cancelled') {
+      const { value: reason } = await Swal.fire({
+        title: 'İptal Sebebi',
+        text: 'Çalışan gelmediği için mi iptal ediliyor?',
+        input: 'textarea',
+        inputPlaceholder: 'İptal sebebi (ör: Çalışan gelmedi)',
+        inputValue: 'Çalışan gelmedi',
+        showCancelButton: true,
+        confirmButtonText: 'İptal Et',
+        confirmButtonColor: '#ef4444',
+        cancelButtonText: 'Vazgeç'
+      });
+
+      if (!reason) {
+        setShowStatusModal(false);
+        return;
+      }
+      cancellationReason = reason;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/change-status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          cancellationReason
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to change status');
+
+      // Update local state
+      setAppointments(appointments.map(a =>
+        a.id === appointmentId ? { ...a, status: newStatus as any } : a
+      ));
+
+      setShowStatusModal(false);
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Durum Değiştirildi',
+        text: `Randevu durumu başarıyla "${newStatus === 'completed' ? 'Tamamlandı' : 'İptal Edildi'}" olarak değiştirildi.`,
+        confirmButtonColor: '#3b82f6'
+      });
+    } catch (error) {
+      console.error('Error changing status:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Durum değiştirilirken hata oluştu',
         confirmButtonColor: '#ef4444'
       });
     }
@@ -482,6 +577,7 @@ export function AppointmentManagement({ adminUser }: Props) {
           { label: 'Tümü', key: 'all' as const },
           { label: 'Beklemede', key: 'pending' as const },
           { label: 'Onaylı', key: 'approved' as const },
+          { label: 'Tamamlananlar', key: 'completed' as const },
           { label: 'İptal', key: 'cancelled' as const }
         ].map(({ label, key }) => (
           <button
@@ -582,6 +678,27 @@ export function AppointmentManagement({ adminUser }: Props) {
                             >
                               <Edit className="w-3 h-3" />
                               <span className="hidden sm:inline">Atama</span>
+                            </button>
+                          </>
+                        )}
+                        {apt.status === 'approved' && (
+                          <>
+                            <button
+                              onClick={() => handleRemindAppointment(apt.id)}
+                              className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded"
+                              title="Hatırlat"
+                            >
+                              🔔
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedAppointmentForStatus(apt);
+                                setShowStatusModal(true);
+                              }}
+                              className="text-xs sm:text-sm text-orange-600 hover:text-orange-800 font-semibold hover:bg-orange-50 px-2 py-1 rounded"
+                              title="Durum Değiştir"
+                            >
+                              ⚙️
                             </button>
                           </>
                         )}
@@ -710,6 +827,51 @@ export function AppointmentManagement({ adminUser }: Props) {
             </div>
           )}
         </>
+      )}
+
+      {/* Status Change Modal */}
+      {showStatusModal && selectedAppointmentForStatus && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Durum Değiştir</h3>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mb-6 p-3 bg-gray-50 rounded">
+                <p className="text-sm font-medium text-gray-900">{selectedAppointmentForStatus.userName}</p>
+                <p className="text-xs text-gray-600">{selectedAppointmentForStatus.date} - {selectedAppointmentForStatus.time}</p>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleChangeStatus('completed')}
+                  className="w-full bg-green-50 hover:bg-green-100 text-green-700 font-semibold py-3 rounded-lg transition"
+                >
+                  ✓ Tamamlandı
+                </button>
+                <button
+                  onClick={() => handleChangeStatus('cancelled')}
+                  className="w-full bg-red-50 hover:bg-red-100 text-red-700 font-semibold py-3 rounded-lg transition"
+                >
+                  ✕ İptal Edildi
+                </button>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition"
+                >
+                  Vazgeç
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

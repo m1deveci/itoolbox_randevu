@@ -8,7 +8,8 @@ const {
   sendAppointmentCancellationToUser,
   sendReassignmentNotificationToOldExpert,
   sendReassignmentNotificationToNewExpert,
-  sendReassignmentNotificationToUser
+  sendReassignmentNotificationToUser,
+  sendAppointmentCompletionToUser
 } = require('../utils/emailHelper.cjs');
 
 // Helper function to get reassignment reason from request body
@@ -877,6 +878,13 @@ module.exports = (pool) => {
         } catch (error) {
           console.error('Error clearing availability:', error);
         }
+      }
+
+      // If completed, send completion email with survey link
+      if (newStatus === 'completed') {
+        sendAppointmentCompletionToUser(pool, appointment, { name: appointment.expert_name }).catch(error => {
+          console.error('Error sending completion email:', error);
+        });
       }
 
       // Log activity

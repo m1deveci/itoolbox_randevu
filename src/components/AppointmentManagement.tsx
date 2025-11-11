@@ -287,10 +287,7 @@ export function AppointmentManagement({ adminUser }: Props) {
     }
   };
 
-  const handleChangeStatus = async (newStatus: string) => {
-    if (!selectedAppointmentForStatus) return;
-
-    const appointmentId = selectedAppointmentForStatus.id;
+  const changeStatusDirect = async (appointmentId: string, newStatus: string) => {
     let cancellationReason = '';
 
     // If changing to cancelled, ask for reason
@@ -308,7 +305,6 @@ export function AppointmentManagement({ adminUser }: Props) {
       });
 
       if (!reason) {
-        setShowStatusModal(false);
         return;
       }
       cancellationReason = reason;
@@ -335,8 +331,6 @@ export function AppointmentManagement({ adminUser }: Props) {
         a.id === appointmentId ? { ...a, status: newStatus as any } : a
       ));
 
-      setShowStatusModal(false);
-
       await Swal.fire({
         icon: 'success',
         title: 'Durum Değiştirildi',
@@ -352,6 +346,12 @@ export function AppointmentManagement({ adminUser }: Props) {
         confirmButtonColor: '#ef4444'
       });
     }
+  };
+
+  const handleChangeStatus = async (newStatus: string) => {
+    if (!selectedAppointmentForStatus) return;
+    await changeStatusDirect(selectedAppointmentForStatus.id, newStatus);
+    setShowStatusModal(false);
   };
 
   const checkExpertAvailability = async (
@@ -683,23 +683,40 @@ export function AppointmentManagement({ adminUser }: Props) {
                         )}
                         {apt.status === 'approved' && (
                           <>
-                            <button
-                              onClick={() => handleRemindAppointment(apt.id)}
-                              className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded"
-                              title="Hatırlat"
-                            >
-                              🔔
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedAppointmentForStatus(apt);
-                                setShowStatusModal(true);
-                              }}
-                              className="text-xs sm:text-sm text-orange-600 hover:text-orange-800 font-semibold hover:bg-orange-50 px-2 py-1 rounded"
-                              title="Durum Değiştir"
-                            >
-                              ⚙️
-                            </button>
+                            {/* Check if appointment time has passed */}
+                            {(() => {
+                              const now = new Date();
+                              const aptDateTime = new Date(apt.date + 'T' + apt.time);
+                              return aptDateTime < now ? (
+                                <button
+                                  onClick={() => changeStatusDirect(apt.id, 'completed')}
+                                  className="text-xs sm:text-sm text-green-600 hover:text-green-800 font-semibold hover:bg-green-50 px-2 py-1 rounded"
+                                  title="Tamamla"
+                                >
+                                  ✓ Tamamla
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleRemindAppointment(apt.id)}
+                                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-semibold hover:bg-blue-50 px-2 py-1 rounded"
+                                    title="Hatırlat"
+                                  >
+                                    🔔
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedAppointmentForStatus(apt);
+                                      setShowStatusModal(true);
+                                    }}
+                                    className="text-xs sm:text-sm text-orange-600 hover:text-orange-800 font-semibold hover:bg-orange-50 px-2 py-1 rounded"
+                                    title="Durum Değiştir"
+                                  >
+                                    ⚙️
+                                  </button>
+                                </>
+                              );
+                            })()}
                           </>
                         )}
                         {apt.status === 'cancelled' && (

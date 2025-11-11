@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link, useParams } from 'react-router-dom';
 import { Calendar, Users, Clock, Settings, Bell } from 'lucide-react';
 import { ExpertManagement } from './components/ExpertManagement';
 import { AvailabilityManager } from './components/AvailabilityManager';
@@ -7,6 +7,7 @@ import { AppointmentBooking } from './components/AppointmentBooking';
 import { AppointmentManagement } from './components/AppointmentManagement';
 import { AdminLogin } from './components/AdminLogin';
 import { SettingsPage } from './components/SettingsPage';
+import { Survey } from './components/Survey';
 
 function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => void }) {
   const location = useLocation();
@@ -195,6 +196,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicPage />} />
+      <Route path="/survey/:appointmentId" element={<SurveyPage />} />
       <Route path="/admin/login" element={<AdminLogin onLoginSuccess={handleLoginSuccess} />} />
       <Route path="/admin/*" element={<ProtectedAdminRoute adminUser={adminUser} onLogout={handleLogout} loading={loading} />} />
     </Routes>
@@ -215,6 +217,20 @@ function PublicPage() {
       </button>
     </div>
   );
+}
+
+function SurveyPage() {
+  const { appointmentId } = useParams<{ appointmentId: string }>();
+
+  if (!appointmentId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-600 text-lg">Geçersiz anket bağlantısı</div>
+      </div>
+    );
+  }
+
+  return <Survey appointmentId={appointmentId} />;
 }
 
 function AppWrapper() {

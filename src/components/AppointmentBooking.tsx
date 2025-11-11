@@ -329,7 +329,7 @@ export function AppointmentBooking() {
 
   const handleTicketNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase(); // Büyük harfe çevir
-    if (value.length <= 10) {
+    if (value.length <= 11) {
       setTicketNo(value);
     }
   };
@@ -348,33 +348,43 @@ export function AppointmentBooking() {
       return;
     }
 
-    if (ticketNo.length !== 10) {
+    if (ticketNo.length < 10) {
       await Swal.fire({
         icon: 'warning',
         title: 'Geçersiz Ticket No',
-        text: 'IT Ticket No tam 10 karakter olmalıdır (örn: INC0123456)',
+        text: 'IT Ticket No minimum 10 karakter olmalıdır',
         confirmButtonColor: '#3b82f6'
       });
       return;
     }
 
-    if (!ticketNo.startsWith('INC0')) {
+    // Ticket No INC0, RITM veya REQ ile başlamalı
+    const isValidPrefix = ticketNo.startsWith('INC0') || ticketNo.startsWith('RITM') || ticketNo.startsWith('REQ');
+    if (!isValidPrefix) {
       await Swal.fire({
         icon: 'warning',
         title: 'Geçersiz Ticket No',
-        text: 'IT Ticket No INC0 ile başlamalıdır (örn: INC0123456)',
+        text: 'IT Ticket No INC0, RITM veya REQ ile başlamalıdır (örn: INC0123456, RITM0012345, REQ0123456)',
         confirmButtonColor: '#3b82f6'
       });
       return;
     }
 
-    // INC0 sonrası 6 rakam olmalı
-    const afterInc0 = ticketNo.substring(4);
-    if (!/^\d{6}$/.test(afterInc0)) {
+    // Prefix sonrası rakam olmalı
+    let suffix = '';
+    if (ticketNo.startsWith('INC0')) {
+      suffix = ticketNo.substring(4);
+    } else if (ticketNo.startsWith('RITM')) {
+      suffix = ticketNo.substring(4);
+    } else if (ticketNo.startsWith('REQ')) {
+      suffix = ticketNo.substring(3);
+    }
+
+    if (!/^\d+$/.test(suffix) || suffix.length === 0) {
       await Swal.fire({
         icon: 'warning',
         title: 'Geçersiz Ticket No',
-        text: 'IT Ticket No formatı: INC0 + 6 rakam (örn: INC0123456)',
+        text: 'Prefix sonrasında rakam bulunmalıdır',
         confirmButtonColor: '#3b82f6'
       });
       return;
@@ -814,7 +824,8 @@ export function AppointmentBooking() {
                     type="text"
                     value={ticketNo}
                     onChange={handleTicketNoChange}
-                    maxLength={10}
+                    maxLength={11}
+                    placeholder="INC0123456 veya RITM0012345 veya REQ0123456"
                     className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition font-mono uppercase"
                   />
                 </div>
@@ -1018,7 +1029,7 @@ export function AppointmentBooking() {
                             <p className="text-xs sm:text-sm text-gray-600 font-mono break-all">Ticket: {apt.ticket_no}</p>
                           )}
                           <p className="text-xs sm:text-sm text-gray-600">
-                            {new Date(apt.date).toLocaleDateString('tr-TR', {
+                            {new Date(apt.date + 'T00:00:00').toLocaleDateString('tr-TR', {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'

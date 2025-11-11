@@ -8,6 +8,7 @@ import { AppointmentManagement } from './components/AppointmentManagement';
 import { AdminLogin } from './components/AdminLogin';
 import { SettingsPage } from './components/SettingsPage';
 import { Survey } from './components/Survey';
+import { SurveyResults } from './components/SurveyResults';
 
 function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => void }) {
   const location = useLocation();
@@ -85,17 +86,30 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
                 <span className="hidden sm:inline">Müsaitlik</span>
               </Link>
               {adminUser?.role === 'superadmin' && (
-                <Link
-                  to="/admin/ayarlar"
-                  className={`inline-flex items-center gap-1 px-2 sm:px-4 py-2 border-b-2 text-xs sm:text-sm font-medium transition whitespace-nowrap ${
-                    location.pathname === '/admin/ayarlar'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Settings size={16} />
-                  <span className="hidden sm:inline">Ayarlar</span>
-                </Link>
+                <>
+                  <Link
+                    to="/admin/anketler"
+                    className={`inline-flex items-center gap-1 px-2 sm:px-4 py-2 border-b-2 text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                      location.pathname === '/admin/anketler'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    📊
+                    <span className="hidden sm:inline">Anketler</span>
+                  </Link>
+                  <Link
+                    to="/admin/ayarlar"
+                    className={`inline-flex items-center gap-1 px-2 sm:px-4 py-2 border-b-2 text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                      location.pathname === '/admin/ayarlar'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Settings size={16} />
+                    <span className="hidden sm:inline">Ayarlar</span>
+                  </Link>
+                </>
               )}
             </div>
 
@@ -141,7 +155,10 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
           <Route path="uzmanlar" element={<ExpertManagement />} />
           <Route path="musaitlik" element={<AvailabilityManager adminUser={adminUser} />} />
           {adminUser?.role === 'superadmin' && (
-            <Route path="ayarlar" element={<SettingsPage adminUser={adminUser} />} />
+            <>
+              <Route path="anketler" element={<SurveyResults />} />
+              <Route path="ayarlar" element={<SettingsPage adminUser={adminUser} />} />
+            </>
           )}
           <Route path="*" element={<Navigate to="/admin/randevular" replace />} />
         </Routes>

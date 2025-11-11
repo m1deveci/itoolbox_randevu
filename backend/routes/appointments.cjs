@@ -24,7 +24,7 @@ module.exports = (pool) => {
       const offset = (parseInt(page) - 1) * parseInt(limit);
 
       let query = `
-        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
                e.name as expert_name, a.created_at
         FROM appointments a
@@ -224,7 +224,7 @@ module.exports = (pool) => {
       const { email } = req.params;
 
       const query = `
-        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+        SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
                e.name as expert_name, a.created_at
         FROM appointments a
@@ -246,7 +246,7 @@ module.exports = (pool) => {
   router.get('/:id', async (req, res) => {
     try {
       const [appointments] = await pool.execute(
-        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, a.appointment_date as date,
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
                 a.appointment_time as time, a.status, a.notes, a.cancellation_reason,
                 e.name as expert_name, a.created_at
          FROM appointments a
@@ -276,9 +276,10 @@ module.exports = (pool) => {
         return res.status(400).json({ error: 'Expert ID, user name, email, phone, ticket number, date, and time are required' });
       }
 
-      // Validate ticket number format (INC0 + 6 digits = 10 characters total)
-      if (!/^INC0\d{6}$/.test(ticketNo)) {
-        return res.status(400).json({ error: 'Ticket number must be in format INC0XXXXXX (10 characters total)' });
+      // Validate ticket number format (INC0/RITM + 7 digits OR REQ + 6+ digits)
+      const isValidTicket = /^(INC0\d{6}|RITM\d{7}|REQ\d{6,})$/.test(ticketNo);
+      if (!isValidTicket) {
+        return res.status(400).json({ error: 'Ticket number must be in format INC0XXXXXX, RITMXXXXXXX or REQXXXXXX' });
       }
 
       // Check if expert exists and get expert details

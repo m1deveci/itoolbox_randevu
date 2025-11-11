@@ -312,6 +312,8 @@ Randevu Detayları:
 
 Randevu tarihinizde hazır olmanızı rica ederiz.
 
+ÖNEMLİ: Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+
 İyi günler,
 IT Randevu Sistemi
   `;
@@ -331,6 +333,12 @@ IT Randevu Sistemi
       </div>
 
       <p>Randevu tarihinizde hazır olmanızı rica ederiz.</p>
+
+      <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+        <p style="margin: 0; color: #92400e; font-size: 14px;">
+          ⚠️ <strong>Önemli:</strong> Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+        </p>
+      </div>
 
       <div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
         <p style="margin: 0; color: #1e40af; font-size: 13px;">

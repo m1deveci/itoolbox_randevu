@@ -218,7 +218,8 @@ export function AppointmentBooking() {
       if (!availResponse.ok) throw new Error('Failed to fetch availability');
       const availData = await availResponse.json();
 
-      // Parse dates to YYYY-MM-DD format (avoid timezone issues)
+      // Backend'den gelen tarihler zaten YYYY-MM-DD formatında (DATE_FORMAT ile)
+      // Sadece güvenlik için normalize ediyoruz
       const parsedAvailabilities = availData.map((a: any) => {
         let dateString = a.availability_date;
         if (typeof dateString === 'string') {
@@ -228,28 +229,30 @@ export function AppointmentBooking() {
           } else if (dateString.includes('T')) {
             dateString = dateString.split('T')[0];
           }
-          // Eğer zaten YYYY-MM-DD formatındaysa, direkt kullan (timezone sorunlarını önlemek için)
+          // YYYY-MM-DD formatını doğrula
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-            // Sadece geçerli format değilse Date objesi ile parse et
+            console.warn('Invalid date format from API:', a.availability_date);
+            // Fallback: Date objesi ile parse et
             const dateObj = new Date(a.availability_date + 'T00:00:00');
-            // Yerel saat diliminde tarih bileşenlerini al
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
             dateString = `${year}-${month}-${day}`;
           }
-        } else {
-          // Eğer Date objesi ise, yerel saat diliminde tarih bileşenlerini al
-          const dateObj = new Date(a.availability_date);
-          const year = dateObj.getFullYear();
-          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-          const day = String(dateObj.getDate()).padStart(2, '0');
+        } else if (dateString instanceof Date) {
+          // Date objesi ise, yerel saat diliminde tarih bileşenlerini al
+          const year = dateString.getFullYear();
+          const month = String(dateString.getMonth() + 1).padStart(2, '0');
+          const day = String(dateString.getDate()).padStart(2, '0');
           dateString = `${year}-${month}-${day}`;
         }
 
         return {
           ...a,
-          availability_date: dateString
+          availability_date: dateString,
+          // Zaman formatlarını da normalize et (backend'den HH:MM formatında geliyor)
+          start_time: a.start_time ? a.start_time.substring(0, 5) : '',
+          end_time: a.end_time ? a.end_time.substring(0, 5) : ''
         };
       });
 
@@ -274,10 +277,28 @@ export function AppointmentBooking() {
   const calculateAvailableTimes = (availabilities: Availability[], appointments: any[]) => {
     if (!selectedDate) return;
 
+    // Normalize selectedDate to YYYY-MM-DD format
+    const normalizedSelectedDate = selectedDate.includes('T') 
+      ? selectedDate.split('T')[0] 
+      : selectedDate.split(' ')[0];
+
     // Filter availabilities for this specific date
-    const dayAvailabilities = availabilities.filter(
-      (avail) => avail.availability_date === selectedDate
-    );
+    // Normalize both dates for comparison to avoid timezone issues
+    const dayAvailabilities = availabilities.filter((avail) => {
+      const availDate = typeof avail.availability_date === 'string' 
+        ? (avail.availability_date.includes('T') 
+            ? avail.availability_date.split('T')[0] 
+            : avail.availability_date.split(' ')[0])
+        : '';
+      return availDate === normalizedSelectedDate;
+    });
+
+    // Debug logging (only in development)
+    if (process.env.NODE_ENV === 'development' && dayAvailabilities.length === 0 && availabilities.length > 0) {
+      console.log('No availabilities found for date:', normalizedSelectedDate);
+      console.log('Available dates:', availabilities.map(a => a.availability_date).slice(0, 10));
+      console.log('Selected date:', normalizedSelectedDate);
+    }
 
     if (dayAvailabilities.length === 0) {
       setAvailableTimes([]);
@@ -285,9 +306,26 @@ export function AppointmentBooking() {
     }
 
     // Get all booked times for this date
+    // Consider appointments with status: pending, approved, or completed as booked
+    // Only cancelled appointments are considered available
     const bookedTimes = appointments
-      .filter((apt) => apt.status !== 'cancelled')
-      .map((apt) => apt.time.substring(0, 5)); // Format: "HH:MM"
+      .filter((apt) => {
+        // Filter by status (only non-cancelled appointments are booked)
+        if (apt.status === 'cancelled') return false;
+        
+        // Also verify the appointment date matches selected date (safety check)
+        const aptDate = apt.date || '';
+        const normalizedAptDate = aptDate.includes('T') 
+          ? aptDate.split('T')[0] 
+          : aptDate.split(' ')[0];
+        return normalizedAptDate === normalizedSelectedDate;
+      })
+      .map((apt) => {
+        // Normalize time format to HH:MM
+        const timeStr = apt.time || '';
+        return timeStr.substring(0, 5);
+      })
+      .filter((time) => time.length === 5); // Only include valid times
 
     // Generate time slots from availabilities (exact startTime matches)
     const timeSlots: string[] = [];

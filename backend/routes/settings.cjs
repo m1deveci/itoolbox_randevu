@@ -52,7 +52,9 @@ module.exports = (pool) => {
     try {
       const { value } = req.body;
       const userId = req.headers['x-user-id'] || null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
       
       // Insert or update setting (ON DUPLICATE KEY UPDATE)
       await pool.execute(
@@ -172,7 +174,9 @@ module.exports = (pool) => {
     try {
       const { smtp_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, testEmail } = req.body;
       const userId = req.headers['x-user-id'] || null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       if (smtp_enabled !== 'true') {
         return res.status(400).json({ error: 'SMTP is not enabled' });
@@ -254,7 +258,9 @@ module.exports = (pool) => {
       
       // Log failed test
       const userId = req.headers['x-user-id'] || null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
       try {
         await pool.execute(
           `INSERT INTO activity_logs (user_id, user_name, action, entity_type, details, ip_address, user_agent)

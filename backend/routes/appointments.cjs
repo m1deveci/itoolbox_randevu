@@ -26,7 +26,7 @@ module.exports = (pool) => {
 
       let query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-               a.appointment_time as time,
+               TIME_FORMAT(a.appointment_time, '%H:%i') as time,
                a.status,
                a.notes, a.cancellation_reason,
                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
@@ -49,11 +49,15 @@ module.exports = (pool) => {
       if (date) {
         query += ' AND DATE(a.appointment_date) = ?';
         params.push(date);
+        // If filtering by date, don't apply pagination limit (we need all appointments for that date)
+        // This ensures all appointments for a specific date are returned for availability checking
+        query += ' ORDER BY a.appointment_time ASC';
+      } else {
+        // Only apply pagination if not filtering by specific date
+        query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
+        query += ' LIMIT ? OFFSET ?';
+        params.push(parseInt(limit), offset);
       }
-
-      query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
-      query += ' LIMIT ? OFFSET ?';
-      params.push(parseInt(limit), offset);
 
       const [appointments] = await pool.execute(query, params);
       
@@ -233,7 +237,7 @@ module.exports = (pool) => {
 
       const query = `
         SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-               a.appointment_time as time,
+               TIME_FORMAT(a.appointment_time, '%H:%i') as time,
                a.status,
                a.notes, a.cancellation_reason,
                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
@@ -257,7 +261,7 @@ module.exports = (pool) => {
     try {
       const [appointments] = await pool.execute(
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no, DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as date,
-                a.appointment_time as time,
+                TIME_FORMAT(a.appointment_time, '%H:%i') as time,
                 a.status,
                 a.notes, a.cancellation_reason,
                 COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, a.created_at
@@ -308,9 +312,11 @@ module.exports = (pool) => {
 
       // Check if expert has availability for this date
       // Get expert's availabilities for this specific date
+      // Use DATE() function to ensure proper date comparison and TIME_FORMAT for time
       const [availabilities] = await pool.execute(
-        `SELECT start_time, end_time FROM availability
-         WHERE expert_id = ? AND availability_date = ?`,
+        `SELECT TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time 
+         FROM availability
+         WHERE expert_id = ? AND DATE(availability_date) = ?`,
         [expertId, appointmentDate]
       );
 
@@ -321,21 +327,31 @@ module.exports = (pool) => {
       // Check if the requested time matches exactly with any availability startTime
       const requestedTimeStr = appointmentTime.substring(0, 5); // "HH:MM"
       const isTimeAvailable = availabilities.some((avail) => {
-        const availStartTime = avail.start_time.substring(0, 5); // "HH:MM"
+        const availStartTime = avail.start_time; // Already formatted as "HH:MM" from TIME_FORMAT
         // Check if requested time exactly matches availability startTime
         return availStartTime === requestedTimeStr;
       });
 
       if (!isTimeAvailable) {
+        // Debug logging
+        console.log('Availability check failed:', {
+          expertId,
+          appointmentDate,
+          requestedTime: requestedTimeStr,
+          availableTimes: availabilities.map(a => a.start_time)
+        });
         return res.status(400).json({ error: 'Selected time is not available for this expert' });
       }
 
       // Check if time slot is already booked
+      // Use DATE() for date comparison and TIME_FORMAT for time comparison
+      const requestedTimeStrForConflict = appointmentTime.substring(0, 5); // "HH:MM"
       const [conflicts] = await pool.execute(
         `SELECT id FROM appointments
-         WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
+         WHERE expert_id = ? AND DATE(appointment_date) = ? 
+         AND TIME_FORMAT(appointment_time, '%H:%i') = ?
          AND status != 'cancelled'`,
-        [expertId, appointmentDate, appointmentTime]
+        [expertId, appointmentDate, requestedTimeStrForConflict]
       );
 
       if (conflicts.length > 0) {
@@ -419,7 +435,9 @@ module.exports = (pool) => {
     try {
       const appointmentId = parseInt(req.params.id);
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       // Get appointment details before update
       const [appointments] = await pool.execute(
@@ -521,7 +539,9 @@ module.exports = (pool) => {
       const appointmentId = parseInt(req.params.id);
       const { newExpertId } = req.body;
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       if (!newExpertId) {
         return res.status(400).json({ error: 'New expert ID is required' });
@@ -568,9 +588,10 @@ module.exports = (pool) => {
       const newExpert = newExperts[0];
 
       // Check if new expert has availability for this date and time
+      // Use DATE() function to ensure proper date comparison and TIME_FORMAT for time
       const [availabilities] = await pool.execute(
-        `SELECT start_time FROM availability
-         WHERE expert_id = ? AND availability_date = ?`,
+        `SELECT TIME_FORMAT(start_time, '%H:%i') as start_time FROM availability
+         WHERE expert_id = ? AND DATE(availability_date) = ?`,
         [newExpertId, appointment.appointment_date]
       );
 
@@ -581,7 +602,7 @@ module.exports = (pool) => {
       // Check if requested time matches exactly with any availability startTime
       const requestedTimeStr = appointment.appointment_time.substring(0, 5);
       const isTimeAvailable = availabilities.some((avail) => {
-        const availStartTime = avail.start_time.substring(0, 5);
+        const availStartTime = avail.start_time; // Already formatted as "HH:MM" from TIME_FORMAT
         return availStartTime === requestedTimeStr;
       });
 
@@ -590,11 +611,13 @@ module.exports = (pool) => {
       }
 
       // Check if time slot is already booked for new expert
+      // Use DATE() for date comparison and TIME_FORMAT for time comparison
       const [conflicts] = await pool.execute(
         `SELECT id FROM appointments
-         WHERE expert_id = ? AND appointment_date = ? AND appointment_time = ?
+         WHERE expert_id = ? AND DATE(appointment_date) = ? 
+         AND TIME_FORMAT(appointment_time, '%H:%i') = ?
          AND status != 'cancelled'`,
-        [newExpertId, appointment.appointment_date, appointment.appointment_time]
+        [newExpertId, appointment.appointment_date, requestedTimeStr]
       );
 
       if (conflicts.length > 0) {
@@ -680,7 +703,9 @@ module.exports = (pool) => {
       const appointmentId = parseInt(req.params.id);
       const { cancellationReason } = req.body;
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       // Get appointment details before update
       const [appointments] = await pool.execute(
@@ -812,7 +837,9 @@ module.exports = (pool) => {
       const appointmentId = parseInt(req.params.id);
       const { status: newStatus, cancellationReason } = req.body;
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       if (!['completed', 'cancelled'].includes(newStatus)) {
         return res.status(400).json({ error: 'Invalid status. Must be completed or cancelled' });
@@ -859,11 +886,14 @@ module.exports = (pool) => {
         });
 
         // Clear the time slot from expert's availability
+        // Use DATE() for date comparison and TIME_FORMAT for time comparison
         try {
+          const appointmentTimeStr = appointment.appointment_time.substring(0, 5); // "HH:MM"
           await pool.execute(
             `DELETE FROM availability
-             WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
-            [appointment.expert_id, appointment.appointment_date, appointment.appointment_time]
+             WHERE expert_id = ? AND DATE(availability_date) = ? 
+             AND TIME_FORMAT(start_time, '%H:%i') = ?`,
+            [appointment.expert_id, appointment.appointment_date, appointmentTimeStr]
           );
         } catch (error) {
           console.error('Error clearing availability:', error);

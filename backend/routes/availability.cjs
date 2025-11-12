@@ -14,9 +14,10 @@ module.exports = (pool) => {
         const timeStr = time.substring(0, 5); // Normalize to HH:MM format
 
         // Check if there's an availability record for this exact time slot
+        // Use DATE() function to ensure proper date comparison
         const [availabilities] = await pool.execute(
           `SELECT id FROM availability
-           WHERE expert_id = ? AND availability_date = ? AND start_time = ?`,
+           WHERE expert_id = ? AND DATE(availability_date) = ? AND TIME_FORMAT(start_time, '%H:%i') = ?`,
           [expertId, date, timeStr]
         );
 
@@ -40,7 +41,9 @@ module.exports = (pool) => {
 
       // Otherwise, get all availabilities (filtered by expertId if provided)
       let query = `
-        SELECT a.id, a.expert_id, a.availability_date, a.start_time, a.end_time,
+        SELECT a.id, a.expert_id, DATE_FORMAT(a.availability_date, '%Y-%m-%d') as availability_date, 
+               TIME_FORMAT(a.start_time, '%H:%i') as start_time, 
+               TIME_FORMAT(a.end_time, '%H:%i') as end_time,
                e.name as expert_name, a.created_at
         FROM availability a
         JOIN experts e ON a.expert_id = e.id
@@ -66,7 +69,9 @@ module.exports = (pool) => {
   router.get('/:id', async (req, res) => {
     try {
       const [availabilities] = await pool.execute(
-        `SELECT a.id, a.expert_id, a.availability_date, a.start_time, a.end_time,
+        `SELECT a.id, a.expert_id, DATE_FORMAT(a.availability_date, '%Y-%m-%d') as availability_date, 
+                TIME_FORMAT(a.start_time, '%H:%i') as start_time, 
+                TIME_FORMAT(a.end_time, '%H:%i') as end_time,
                 e.name as expert_name, a.created_at
          FROM availability a
          JOIN experts e ON a.expert_id = e.id
@@ -184,7 +189,9 @@ module.exports = (pool) => {
 
       // Log activity
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || adminName || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : (adminName || 'System');
 
       try {
         // Get expert name for log
@@ -285,7 +292,9 @@ module.exports = (pool) => {
     try {
       const availabilityId = parseInt(req.params.id);
       const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
-      const userName = req.headers['x-user-name'] || 'System';
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
 
       // Get availability details before delete
       const [availabilities] = await pool.execute(

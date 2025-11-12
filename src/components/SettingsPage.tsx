@@ -94,16 +94,93 @@ export function SettingsPage({ adminUser }: Props) {
     }
   };
 
+  const translateDetails = (details: any): any => {
+    if (!details || typeof details !== 'object') return details;
+    
+    const translated: any = {};
+    const translations: { [key: string]: string } = {
+      'appointment_id': 'Randevu ID',
+      'expert_id': 'Uzman ID',
+      'expert_name': 'Uzman Adı',
+      'user_name': 'Kullanıcı Adı',
+      'user_email': 'Kullanıcı E-postası',
+      'appointment_date': 'Randevu Tarihi',
+      'appointment_time': 'Randevu Saati',
+      'ticket_no': 'Ticket No',
+      'old_status': 'Eski Durum',
+      'new_status': 'Yeni Durum',
+      'cancellation_reason': 'İptal Sebebi',
+      'availability_id': 'Müsaitlik ID',
+      'availability_date': 'Müsaitlik Tarihi',
+      'start_time': 'Başlangıç Saati',
+      'end_time': 'Bitiş Saati',
+      'key': 'Ayar Anahtarı',
+      'value': 'Değer',
+      'old_expert_id': 'Eski Uzman ID',
+      'old_expert_name': 'Eski Uzman Adı',
+      'new_expert_id': 'Yeni Uzman ID',
+      'new_expert_name': 'Yeni Uzman Adı',
+      'reassignment_reason': 'Uzman Değiştirme Sebebi'
+    };
+
+    const statusTranslations: { [key: string]: string } = {
+      'pending': 'Beklemede',
+      'approved': 'Onaylı',
+      'cancelled': 'İptal',
+      'completed': 'Tamamlandı'
+    };
+
+    for (const [key, value] of Object.entries(details)) {
+      const translatedKey = translations[key] || key;
+      
+      if (key === 'old_status' || key === 'new_status' || key === 'status') {
+        translated[translatedKey] = statusTranslations[value as string] || value;
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        translated[translatedKey] = translateDetails(value);
+      } else {
+        translated[translatedKey] = value;
+      }
+    }
+    
+    return translated;
+  };
+
   const loadActivityLogs = async () => {
     setLogsLoading(true);
     try {
       const response = await fetch(`/api/settings/activity-logs/list?page=${logsPage}&limit=20`);
       if (!response.ok) throw new Error('Failed to fetch activity logs');
       const data = await response.json();
-      setActivityLogs(data.logs.map((log: any) => ({
-        ...log,
-        details: log.details ? JSON.parse(log.details) : null
-      })));
+      setActivityLogs(data.logs.map((log: any) => {
+        // Decode user_name if it contains URL encoding (e.g., %20 for spaces)
+        let decodedUserName = log.user_name;
+        if (log.user_name && (log.user_name.includes('%') || log.user_name.includes('+'))) {
+          try {
+            decodedUserName = decodeURIComponent(log.user_name.replace(/\+/g, ' '));
+          } catch (e) {
+            // If decode fails, use original value
+            decodedUserName = log.user_name;
+          }
+        }
+        
+        // Parse and translate details
+        let parsedDetails = null;
+        if (log.details) {
+          try {
+            parsedDetails = JSON.parse(log.details);
+            parsedDetails = translateDetails(parsedDetails);
+          } catch (e) {
+            // If parsing fails, keep as null
+            parsedDetails = null;
+          }
+        }
+        
+        return {
+          ...log,
+          user_name: decodedUserName,
+          details: parsedDetails
+        };
+      }));
       setLogsTotal(data.pagination.total);
     } catch (error) {
       console.error('Error loading activity logs:', error);
@@ -250,7 +327,12 @@ export function SettingsPage({ adminUser }: Props) {
       'approve_appointment': 'Randevu Onaylama',
       'cancel_appointment': 'Randevu İptal',
       'add_availability': 'Müsaitlik Ekleme',
-      'remove_availability': 'Müsaitlik Kaldırma'
+      'remove_availability': 'Müsaitlik Kaldırma',
+      'reassign_appointment': 'Randevu Uzman Değiştirme',
+      'change_status_to_cancelled': 'Randevu Durumu: İptal',
+      'change_status_to_completed': 'Randevu Durumu: Tamamlandı',
+      'test_smtp': 'SMTP Test',
+      'test_smtp_failed': 'SMTP Test Başarısız'
     };
     return actionMap[action] || action;
   };

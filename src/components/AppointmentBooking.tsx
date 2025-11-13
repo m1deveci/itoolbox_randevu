@@ -282,7 +282,19 @@ export function AppointmentBooking() {
       ? selectedDate.split('T')[0] 
       : selectedDate.split(' ')[0];
 
+    // Calculate next date (1 day after) to handle timezone offset
+    // When availability is added via AvailabilityManager, it's stored with +1 day offset
+    // So if user selects Dec 3, it's stored as Dec 4 in DB
+    // We need to check both Dec 3 (direct match) and Dec 4 (offset match)
+    const dateObj = new Date(normalizedSelectedDate + 'T00:00:00');
+    dateObj.setDate(dateObj.getDate() + 1);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const nextDate = `${year}-${month}-${day}`;
+
     // Filter availabilities for this specific date
+    // Check both selectedDate and nextDate (due to timezone offset)
     // Normalize both dates for comparison to avoid timezone issues
     const dayAvailabilities = availabilities.filter((avail) => {
       const availDate = typeof avail.availability_date === 'string' 
@@ -290,7 +302,8 @@ export function AppointmentBooking() {
             ? avail.availability_date.split('T')[0] 
             : avail.availability_date.split(' ')[0])
         : '';
-      return availDate === normalizedSelectedDate;
+      // Check both selectedDate and nextDate (due to timezone offset)
+      return availDate === normalizedSelectedDate || availDate === nextDate;
     });
 
     // Debug logging (only in development)

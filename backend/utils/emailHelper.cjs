@@ -11,12 +11,12 @@ async function getSiteTitle(pool) {
     );
 
     if (result.length > 0) {
-      return result[0].value || 'IT Randevu Sistemi';
+      return result[0].value || 'Ravago IT Randevu Sistemi';
     }
-    return 'IT Randevu Sistemi';
+    return 'Ravago IT Randevu Sistemi';
   } catch (error) {
     console.error('Error fetching site title:', error);
-    return 'IT Randevu Sistemi';
+    return 'Ravago IT Randevu Sistemi';
   }
 }
 
@@ -80,7 +80,7 @@ async function sendEmail(pool, options) {
 
     const smtpSettings = await getSmtpSettings(pool);
     const fromEmail = smtpSettings?.smtp_from_email || smtpSettings?.smtp_user;
-    const fromName = smtpSettings?.smtp_from_name || 'IT Randevu Sistemi';
+    const fromName = smtpSettings?.smtp_from_name || 'Ravago IT Randevu Sistemi';
 
     const mailOptions = {
       from: `"${fromName}" <${fromEmail}>`,
@@ -144,7 +144,7 @@ function createICalendarContent(appointment, expert) {
 
   const icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//IT Randevu//IT Randevu Sistemi//EN
+PRODID:-//IT Randevu//Ravago IT Randevu Sistemi//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:IT Uzman Randevusu
@@ -222,7 +222,7 @@ ${appointment.notes ? `- Notlar: ${appointment.notes}` : ''}
 Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz.
 
 İyi çalışmalar,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
   `;
 
   const html = `
@@ -246,7 +246,7 @@ IT Randevu Sistemi
 
       <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
         İyi çalışmalar,<br>
-        IT Randevu Sistemi
+        Ravago IT Randevu Sistemi
       </p>
     </div>
   `;
@@ -315,7 +315,7 @@ Randevu tarihinizde hazır olmanızı rica ederiz.
 ÖNEMLİ: Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
 
 İyi günler,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
   `;
 
   const html = `
@@ -348,7 +348,7 @@ IT Randevu Sistemi
 
       <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
         İyi günler,<br>
-        IT Randevu Sistemi
+        Ravago IT Randevu Sistemi
       </p>
     </div>
   `;
@@ -428,7 +428,7 @@ Randevu Detayları:
 Bu randevu için takvim dosyası e-postaya eklenmiştir.
 
 İyi çalışmalar,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
   `;
 
   const html = `
@@ -455,7 +455,7 @@ IT Randevu Sistemi
 
       <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
         İyi çalışmalar,<br>
-        IT Randevu Sistemi
+        Ravago IT Randevu Sistemi
       </p>
     </div>
   `;
@@ -536,7 +536,7 @@ ${cancellationReason ? `- İptal Sebebi: ${cancellationReason}` : ''}
 Yeni bir randevu oluşturmak için sistemi tekrar ziyaret edebilirsiniz.
 
 İyi günler,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
   `;
 
   const html = `
@@ -558,7 +558,7 @@ IT Randevu Sistemi
 
       <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
         İyi günler,<br>
-        IT Randevu Sistemi
+        Ravago Ravago IT Randevu Sistemi
       </p>
     </div>
   `;
@@ -632,7 +632,7 @@ Randevu Detayları:
 Bu randevu artık sizin sorumluluğunuzda değildir.
 
 İyi çalışmalar,
-IT Randevu Sistemi
+Ravago Ravago IT Randevu Sistemi
     `;
 
     const html = `
@@ -657,16 +657,27 @@ IT Randevu Sistemi
 
         <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
           İyi çalışmalar,<br>
-          IT Randevu Sistemi
+          Ravago IT Randevu Sistemi
         </p>
       </div>
     `;
+
+    // Create iCalendar attachment for old expert (cancelled appointment)
+    const icsContent = createICalendarContent(appointment, newExpert);
+    const attachments = [
+      {
+        filename: `randevu-atama-degisti-iptal-${appointment.id || 'taslak'}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; method=CANCEL; charset="UTF-8"'
+      }
+    ];
 
     return await sendEmail(pool, {
       to: oldExpert.email,
       subject,
       text,
-      html
+      html,
+      attachments
     });
   } catch (error) {
     console.error('Error sending reassignment notification to old expert:', error);
@@ -718,6 +729,10 @@ async function sendReassignmentNotificationToNewExpert(pool, siteTitle, appointm
     });
 
     const subject = `${siteTitle} - Yeni Randevu Ataması - ${formattedDate}`;
+    const statusNote = appointment.status === 'approved' 
+      ? '\n\nBu randevu zaten onaylanmış durumdadır. Randevu tarihinde hazır olmanız gerekmektedir.'
+      : '\n\nRandevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz.';
+    
     const text = `
 Merhaba ${newExpert.name},
 
@@ -731,11 +746,10 @@ Randevu Detayları:
 - Telefon: ${appointment.user_phone}
 - Ticket No: ${appointment.ticket_no}
 - Önceki Atanan Uzman: ${oldExpert.name}
-
-Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz.
+${statusNote}
 
 İyi çalışmalar,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
     `;
 
     const html = `
@@ -760,20 +774,33 @@ IT Randevu Sistemi
           <strong>Lütfen Dikkat:</strong> Bu randevu önceden başka bir uzman tarafından alınmıştı. Taşıma sebebi yukarıda belirtilmiştir.
         </p>
 
-        <p>Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz. Randevuyu onayladığında, müşteriye ve önceki atanan uzmanına bildirim gönderilecektir.</p>
+        ${appointment.status === 'approved' 
+          ? '<p style="padding: 15px; background-color: #fef3c7; border-radius: 8px; color: #92400e; font-size: 13px;"><strong>⚠️ Önemli:</strong> Bu randevu zaten onaylanmış durumdadır. Randevu tarihinde hazır olmanız gerekmektedir.</p>'
+          : '<p>Randevuyu onaylamak veya reddetmek için sisteme giriş yapabilirsiniz. Randevuyu onayladığında, müşteriye ve önceki atanan uzmanına bildirim gönderilecektir.</p>'}
 
         <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
           İyi çalışmalar,<br>
-          IT Randevu Sistemi
+          Ravago IT Randevu Sistemi
         </p>
       </div>
     `;
+
+    // Create iCalendar attachment for new expert
+    const icsContent = createICalendarContent(appointment, newExpert);
+    const attachments = [
+      {
+        filename: `randevu-atama-degisti-yeni-${appointment.id || 'taslak'}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; method=REQUEST; charset="UTF-8"'
+      }
+    ];
 
     return await sendEmail(pool, {
       to: newExpert.email,
       subject,
       text,
-      html
+      html,
+      attachments
     });
   } catch (error) {
     console.error('Error sending reassignment notification to new expert:', error);
@@ -825,6 +852,10 @@ async function sendReassignmentNotificationToUser(pool, siteTitle, appointment, 
     });
 
     const subject = `${siteTitle} - Randevunuzun Atanan Uzmanı Değişti - ${formattedDate}`;
+    const statusMessage = appointment.status === 'approved' 
+      ? 'Randevunuz onaylanmış durumda ve yeni atanan IT Uzmanı tarafından gerçekleştirilecektir.'
+      : 'Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.';
+    
     const text = `
 Merhaba ${appointment.user_name},
 
@@ -837,12 +868,12 @@ Randevu Detayları:
 - Yeni Atanan Uzman: ${newExpert.name}
 - Ticket No: ${appointment.ticket_no}
 
-Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.
+${statusMessage}
 
 Sorularınız varsa, lütfen bizimle iletişim kurunuz.
 
 İyi günler,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
     `;
 
     const html = `
@@ -885,23 +916,36 @@ IT Randevu Sistemi
         </div>
 
         <p style="padding: 15px; background-color: #f0f9ff; border-radius: 8px; color: #1e40af;">
-          <strong>ℹ️ Bilgi:</strong> Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.
+          <strong>ℹ️ Bilgi:</strong> ${appointment.status === 'approved' 
+            ? 'Randevunuz onaylanmış durumda ve yeni atanan IT Uzmanı tarafından gerçekleştirilecektir.' 
+            : 'Randevu talebiniz halen bekleme durumundadır. Yeni atanan uzman tarafından incelenecektir.'}
         </p>
 
         <p>Sorularınız varsa, lütfen bizimle iletişim kurunuz.</p>
 
         <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
           İyi günler,<br>
-          IT Randevu Sistemi
+          Ravago IT Randevu Sistemi
         </p>
       </div>
     `;
+
+    // Create iCalendar attachment for user
+    const icsContent = createICalendarContent(appointment, newExpert);
+    const attachments = [
+      {
+        filename: `randevu-atama-degisti-${appointment.id || 'taslak'}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; method=REQUEST; charset="UTF-8"'
+      }
+    ];
 
     return await sendEmail(pool, {
       to: appointment.user_email,
       subject,
       text,
-      html
+      html,
+      attachments
     });
   } catch (error) {
     console.error('Error sending reassignment notification to user:', error);
@@ -964,7 +1008,7 @@ ${surveyLink}
 Anketinizi tamamladığınız için teşekkür ederiz!
 
 İyi günler,
-IT Randevu Sistemi
+Ravago IT Randevu Sistemi
     `;
 
     const html = `
@@ -989,7 +1033,7 @@ IT Randevu Sistemi
 
         <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
           İyi günler,<br>
-          IT Randevu Sistemi
+          Ravago IT Randevu Sistemi
         </p>
       </div>
     `;
@@ -1006,6 +1050,111 @@ IT Randevu Sistemi
   }
 }
 
+/**
+ * Send appointment reminder notification to user
+ */
+async function sendAppointmentReminderToUser(pool, appointment, expert) {
+  try {
+    const siteTitle = await getSiteTitle(pool);
+
+    // Validate and parse appointment date
+    if (!appointment.appointment_date) {
+      console.error('Appointment date is missing');
+      return false;
+    }
+
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    // Check if date is valid
+    if (isNaN(appointmentDate.getTime())) {
+      console.error('Invalid appointment date:', appointment.appointment_date);
+      return false;
+    }
+
+    const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `${siteTitle} - Randevu Hatırlatması - ${formattedDate}`;
+    const text = `
+Merhaba ${appointment.user_name},
+
+Bu e-posta, randevunuzu hatırlatmak için gönderilmiştir.
+
+Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- IT Uzmanı: ${expert.name}
+- Ticket No: ${appointment.ticket_no}
+
+Randevu tarihinizde hazır olmanızı rica ederiz.
+
+ÖNEMLİ: Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+
+İyi günler,
+Ravago IT Randevu Sistemi
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #3b82f6;">Randevu Hatırlatması</h2>
+        <p>Merhaba <strong>${appointment.user_name}</strong>,</p>
+        <p>Bu e-posta, randevunuzu hatırlatmak için gönderilmiştir.</p>
+
+        <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+          <h3 style="margin-top: 0; color: #1f2937;">Randevu Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>IT Uzmanı:</strong> ${expert.name}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+        </div>
+
+        <p>Randevu tarihinizde hazır olmanızı rica ederiz.</p>
+
+        <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <p style="margin: 0; color: #92400e; font-size: 14px;">
+            ⚠️ <strong>Önemli:</strong> Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+          </p>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi günler,<br>
+          Ravago IT Randevu Sistemi
+        </p>
+      </div>
+    `;
+
+    // Create iCalendar attachment
+    const icsContent = createICalendarContent(appointment, expert);
+    const attachments = [
+      {
+        filename: `randevu-hatirlatma-${appointment.id || 'taslak'}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; method=REQUEST; charset="UTF-8"'
+      }
+    ];
+
+    return await sendEmail(pool, {
+      to: appointment.user_email,
+      subject,
+      text,
+      html,
+      attachments
+    });
+  } catch (error) {
+    console.error('Error sending reminder notification:', error);
+    return false;
+  }
+}
+
 module.exports = {
   sendEmail,
   getSiteTitle,
@@ -1016,8 +1165,10 @@ module.exports = {
   sendReassignmentNotificationToOldExpert,
   sendReassignmentNotificationToNewExpert,
   sendReassignmentNotificationToUser,
-  sendAppointmentCompletionToUser
+  sendAppointmentCompletionToUser,
+  sendAppointmentReminderToUser
 };
+
 
 
 

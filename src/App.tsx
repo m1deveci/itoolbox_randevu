@@ -118,7 +118,7 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
               {/* Notification Bell (Superadmin only) */}
               {adminUser?.role === 'superadmin' && (
                 <button
-                  onClick={() => navigate('/admin/randevular?filter=pending')}
+                  onClick={() => navigate(`/admin/randevular?filter=pending&expertId=${adminUser.id}`)}
                   className="relative p-2 text-gray-600 hover:text-blue-600 transition"
                   title="Bekliyor durumundaki randevular"
                 >

@@ -268,6 +268,14 @@ export function AvailabilityManager({ adminUser }: Props) {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId) return;
 
+    // Calculate targetDate (1 day ahead due to timezone offset)
+    const dateObj = new Date(date + 'T00:00:00');
+    dateObj.setDate(dateObj.getDate() + 1);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const targetDate = `${year}-${month}-${day}`;
+
     try {
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
@@ -275,6 +283,7 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       // Get availability for this specific date
       // Normalize date format from API (same as in loadAvailabilities)
+      // Check both original date and targetDate (due to timezone offset)
       const dateAvailabilities = data.filter((a: any) => {
         let dateString = a.availability_date;
         if (typeof dateString === 'string') {
@@ -303,7 +312,8 @@ export function AvailabilityManager({ adminUser }: Props) {
           const day = String(dateObj.getDate()).padStart(2, '0');
           dateString = `${year}-${month}-${day}`;
         }
-        return dateString === date;
+        // Check both original date and targetDate (due to timezone offset)
+        return dateString === date || dateString === targetDate;
       });
 
       // Get all time slots from availabilities (exact startTime matches)
@@ -358,22 +368,25 @@ export function AvailabilityManager({ adminUser }: Props) {
   const handleAddTimeSlot = async (timeSlot: string, dateOverride?: string) => {
     const expertId = selectedExpertId || adminUser?.id;
     // Use dateOverride if provided, otherwise use selectedDate
-    let targetDate = dateOverride || selectedDate;
-    if (!expertId || !targetDate) {
-      console.error('Missing expertId or targetDate:', { expertId, targetDate, selectedDate, dateOverride });
+    let originalDate = dateOverride || selectedDate;
+    if (!expertId || !originalDate) {
+      console.error('Missing expertId or originalDate:', { expertId, originalDate, selectedDate, dateOverride });
       return;
     }
 
-    // Add 1 day to compensate for timezone offset issue
-    const dateObj = new Date(targetDate + 'T00:00:00');
+    // Store original date for duplicate check (UI shows this date)
+    const originalDateForCheck = originalDate;
+
+    // Add 1 day to compensate for timezone offset issue (for backend)
+    const dateObj = new Date(originalDate + 'T00:00:00');
     dateObj.setDate(dateObj.getDate() + 1);
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
-    targetDate = `${year}-${month}-${day}`;
+    const targetDate = `${year}-${month}-${day}`;
 
     // Debug: Log the selected date to verify it's correct
-    console.log('Adding time slot - original date:', dateOverride || selectedDate, 'adjusted targetDate:', targetDate, 'timeSlot:', timeSlot);
+    console.log('Adding time slot - original date:', originalDate, 'adjusted targetDate:', targetDate, 'timeSlot:', timeSlot);
 
     // Check if time slot is in the past
     if (isTimeSlotPast(targetDate, timeSlot)) {
@@ -434,16 +447,17 @@ export function AvailabilityManager({ adminUser }: Props) {
         // Update state with fresh data
         setAvailabilities(mappedCheck);
         
-        // Also update selectedTimeSlots for the current date
-        const dateAvailabilities = mappedCheck.filter((a: Availability) => a.availabilityDate === targetDate);
+        // Also update selectedTimeSlots for the current date (use originalDate for UI display)
+        const dateAvailabilities = mappedCheck.filter((a: Availability) => a.availabilityDate === originalDateForCheck);
         const availableSlots: string[] = dateAvailabilities
           .map((a: Availability) => a.startTime.substring(0, 5))
           .filter((time: string) => TIME_SLOTS.includes(time));
         setSelectedTimeSlots([...new Set(availableSlots)].sort());
         
-        // Check if this time slot already exists for this date (using fresh data)
+        // Check if this time slot already exists for the ORIGINAL date (what user sees in UI)
+        // We need to check both originalDate and targetDate because of timezone offset
         const existing = mappedCheck.find(
-          (a: Availability) => a.availabilityDate === targetDate &&
+          (a: Availability) => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
           a.startTime === timeSlot
         );
         
@@ -475,7 +489,7 @@ export function AvailabilityManager({ adminUser }: Props) {
                 if (!updateResponse.ok) throw new Error('Failed to update availability');
 
                 await loadAvailabilities();
-                await loadTimeSlotsForDate(targetDate);
+                await loadTimeSlotsForDate(originalDateForCheck);
 
                 await Swal.fire({
                   icon: 'success',
@@ -625,6 +639,17 @@ export function AvailabilityManager({ adminUser }: Props) {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId || !selectedDate) return;
 
+    // Store original date (UI shows this date)
+    const originalDateForCheck = selectedDate;
+
+    // Calculate targetDate (1 day ahead due to timezone offset)
+    const dateObj = new Date(selectedDate + 'T00:00:00');
+    dateObj.setDate(dateObj.getDate() + 1);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const targetDate = `${year}-${month}-${day}`;
+
     // Check if time slot is in the past
     if (isTimeSlotPast(selectedDate, timeSlot)) {
       await Swal.fire({
@@ -674,17 +699,17 @@ export function AvailabilityManager({ adminUser }: Props) {
           };
         });
         
-        // Find availability with exact date and startTime match
+        // Find availability - check both originalDate and targetDate (due to timezone offset)
         availability = mappedCheck.find(
-          (a: Availability) => a.availabilityDate === selectedDate &&
+          (a: Availability) => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
           a.startTime === timeSlot
         );
       }
     } catch (error) {
       console.error('Error fetching availability for removal:', error);
-      // Fallback to state if API call fails
+      // Fallback to state if API call fails - check both dates
       availability = availabilities.find(
-        a => a.availabilityDate === selectedDate &&
+        a => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
         a.startTime === timeSlot
       );
     }
@@ -772,7 +797,23 @@ export function AvailabilityManager({ adminUser }: Props) {
 
   const handleShowAppointments = () => {
     const dateAppointments = appointments.filter(apt => apt.status === 'approved');
-    setSelectedDateAppointments(dateAppointments);
+    
+    // En yakından en uzağa saate göre sırala
+    const now = new Date();
+    const sortedAppointments = [...dateAppointments].sort((a, b) => {
+      // Tarih ve saat bilgisini birleştir
+      const aDateTime = new Date(a.date + 'T' + a.time);
+      const bDateTime = new Date(b.date + 'T' + b.time);
+      
+      // Şu anki zamana olan mesafeyi hesapla
+      const aDistance = Math.abs(aDateTime.getTime() - now.getTime());
+      const bDistance = Math.abs(bDateTime.getTime() - now.getTime());
+      
+      // En yakından en uzağa sırala
+      return aDistance - bDistance;
+    });
+    
+    setSelectedDateAppointments(sortedAppointments);
     setShowAppointmentsModal(true);
   };
 

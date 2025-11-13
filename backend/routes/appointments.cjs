@@ -10,7 +10,8 @@ const {
   sendReassignmentNotificationToOldExpert,
   sendReassignmentNotificationToNewExpert,
   sendReassignmentNotificationToUser,
-  sendAppointmentCompletionToUser
+  sendAppointmentCompletionToUser,
+  sendAppointmentReminderToUser
 } = require('../utils/emailHelper.cjs');
 
 // Create connection pool for ittoolbox database
@@ -638,9 +639,9 @@ module.exports = (pool) => {
 
       const appointment = appointments[0];
 
-      // Check if appointment is pending
-      if (appointment.status !== 'pending') {
-        return res.status(400).json({ error: 'Only pending appointments can be reassigned' });
+      // Allow reassignment for both pending and approved appointments
+      if (appointment.status !== 'pending' && appointment.status !== 'approved') {
+        return res.status(400).json({ error: 'Only pending or approved appointments can be reassigned' });
       }
 
       // Check if old and new expert are different
@@ -893,7 +894,7 @@ module.exports = (pool) => {
       const appointment = appointments[0];
 
       // Send reminder email to user
-      sendAppointmentApprovalToUser(pool, appointment, { name: appointment.expert_name }).catch(error => {
+      sendAppointmentReminderToUser(pool, appointment, { name: appointment.expert_name }).catch(error => {
         console.error('Error sending reminder email:', error);
       });
 

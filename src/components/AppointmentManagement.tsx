@@ -68,7 +68,7 @@ export function AppointmentManagement({ adminUser }: Props) {
   useEffect(() => {
     loadAppointments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, adminUser]);
+  }, [filter, adminUser, searchParams]);
 
   const loadExperts = async () => {
     try {
@@ -101,16 +101,30 @@ export function AppointmentManagement({ adminUser }: Props) {
       const expertId = adminUser?.id;
       const isSuperadmin = adminUser?.role === 'superadmin';
       
+      // Check if expertId is provided in URL params (e.g., from notification click)
+      const urlExpertId = searchParams.get('expertId');
+      const expertIdToUse = urlExpertId ? parseInt(urlExpertId) : expertId;
+      
       // If filter is 'my', show only current user's appointments
       if (filter === 'my' && adminUser && expertId) {
         params.append('expertId', expertId.toString());
       } else if (filter !== 'all' && filter !== 'my') {
         params.append('status', filter);
+        // If expertId is in URL params, use it (e.g., from notification click)
+        if (urlExpertId && expertIdToUse) {
+          params.append('expertId', expertIdToUse.toString());
+        }
       }
       
       // If user is not superadmin, always filter by their expertId (security)
       // Superadmin can see all appointments when filter='all'
-      if (!isSuperadmin && expertId) {
+      // But if expertId is in URL params, use it (e.g., from notification click)
+      if (urlExpertId && expertIdToUse) {
+        // URL'den gelen expertId zaten yukarıda eklenmiş olabilir, tekrar eklemeyelim
+        if (filter === 'all' || filter === 'my') {
+          params.append('expertId', expertIdToUse.toString());
+        }
+      } else if (!isSuperadmin && expertId) {
         params.append('expertId', expertId.toString());
       }
 
@@ -157,6 +171,11 @@ export function AppointmentManagement({ adminUser }: Props) {
       // Benim randevularım tabında tamamlanan randevular gözükmemeli
       if (filter === 'my' && adminUser) {
         mappedAppointments = mappedAppointments.filter((a: Appointment) => a.expertId === adminUser.id && a.status !== 'completed');
+      }
+      
+      // If expertId is in URL params (e.g., from notification click), filter by it
+      if (urlExpertId && expertIdToUse && filter === 'pending') {
+        mappedAppointments = mappedAppointments.filter((a: Appointment) => a.expertId === expertIdToUse);
       }
 
       setAppointments(mappedAppointments);
@@ -823,6 +842,14 @@ export function AppointmentManagement({ adminUser }: Props) {
                               🔔
                             </button>
                             <button
+                              onClick={() => handleReassign(apt.id)}
+                              className="text-xs sm:text-sm text-purple-600 hover:text-purple-800 font-semibold hover:bg-purple-50 px-2 py-1 rounded inline-flex items-center gap-1"
+                              title="Atama Değiştir"
+                            >
+                              <Edit className="w-3 h-3" />
+                              <span className="hidden sm:inline">Atama</span>
+                            </button>
+                            <button
                               onClick={() => {
                                 setSelectedAppointmentForStatus(apt);
                                 setShowStatusModal(true);
@@ -917,6 +944,13 @@ export function AppointmentManagement({ adminUser }: Props) {
                       className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
                     >
                       🔔 Hatırlat
+                    </button>
+                    <button
+                      onClick={() => handleReassign(apt.id)}
+                      className="flex-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-sm font-semibold py-2 rounded transition inline-flex items-center justify-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Atama
                     </button>
                     <button
                       onClick={() => {

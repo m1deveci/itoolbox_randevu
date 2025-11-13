@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mysql = require('mysql2/promise');
 const {
   getSiteTitle,
   sendAppointmentNotificationToExpert,
@@ -11,6 +12,18 @@ const {
   sendReassignmentNotificationToUser,
   sendAppointmentCompletionToUser
 } = require('../utils/emailHelper.cjs');
+
+// Create connection pool for ittoolbox database
+const ittoolboxPool = mysql.createPool({
+  host: process.env.ITTOOLBOX_DB_HOST || 'localhost',
+  user: process.env.ITTOOLBOX_DB_USER || 'toolbox_native',
+  password: process.env.ITTOOLBOX_DB_PASSWORD || 'GuvenliParola123!',
+  database: process.env.ITTOOLBOX_DB_NAME || 'ittoolbox',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+  timezone: '+03:00'
+});
 
 // Helper function to get reassignment reason from request body
 function getReassignmentReason(req) {
@@ -256,7 +269,67 @@ module.exports = (pool) => {
     }
   });
 
+  // GET /api/appointments/:id/phone-info - Get phone information for appointment user
+  // This route must be before /:id route to avoid route conflicts
+  router.get('/:id/phone-info', async (req, res) => {
+    try {
+      console.log('Phone-info route hit:', req.params.id, req.url);
+      const appointmentId = req.params.id;
+      
+      // Validate appointment ID is numeric
+      if (!appointmentId || isNaN(parseInt(appointmentId))) {
+        return res.status(400).json({ error: 'Geçersiz randevu ID' });
+      }
+
+      // Get appointment details from randevu database
+      const [appointments] = await pool.execute(
+        'SELECT user_email FROM appointments WHERE id = ?',
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Randevu bulunamadı' });
+      }
+
+      const userEmail = appointments[0].user_email;
+
+      if (!userEmail) {
+        return res.json({ phones: [], message: 'Randevuya ait e-posta adresi bulunamadı' });
+      }
+
+      // Get user ID from ittoolbox users table by email
+      const [users] = await ittoolboxPool.execute(
+        'SELECT id FROM users WHERE email = ?',
+        [userEmail]
+      );
+
+      if (users.length === 0) {
+        return res.json({ phones: [], message: 'E-posta adresine ait kullanıcı bulunamadı' });
+      }
+
+      const userId = users[0].id;
+
+      // Get mobile phones assigned to this user
+      const [mobilePhones] = await ittoolboxPool.execute(
+        `SELECT inventory_number, brand, model, imei1 
+         FROM mobile_phones 
+         WHERE assigned_user_id = ?`,
+        [userId]
+      );
+
+      res.json({
+        phones: mobilePhones,
+        userEmail: userEmail,
+        userId: userId
+      });
+    } catch (error) {
+      console.error('Error fetching phone info:', error);
+      res.status(500).json({ error: 'Telefon bilgileri alınırken hata oluştu', details: error.message });
+    }
+  });
+
   // GET /api/appointments/:id - Get appointment by ID
+  // This route must be after /:id/phone-info to avoid route conflicts
   router.get('/:id', async (req, res) => {
     try {
       const [appointments] = await pool.execute(

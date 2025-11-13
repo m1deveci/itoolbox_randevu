@@ -46,6 +46,10 @@ export function AppointmentManagement({ adminUser }: Props) {
   const itemsPerPage = 10;
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedAppointmentForStatus, setSelectedAppointmentForStatus] = useState<Appointment | null>(null);
+  const [showPhoneInfoModal, setShowPhoneInfoModal] = useState(false);
+  const [selectedAppointmentForPhone, setSelectedAppointmentForPhone] = useState<Appointment | null>(null);
+  const [phoneInfo, setPhoneInfo] = useState<{ phones: Array<{ inventory_number: string; brand: string; model: string; imei1: string }>; userEmail: string; userId: number; message?: string } | null>(null);
+  const [loadingPhoneInfo, setLoadingPhoneInfo] = useState(false);
 
   // Load experts on mount
   useEffect(() => {
@@ -150,8 +154,9 @@ export function AppointmentManagement({ adminUser }: Props) {
       }));
 
       // If filter is 'my', filter by expert ID client-side as well
+      // Benim randevularım tabında tamamlanan randevular gözükmemeli
       if (filter === 'my' && adminUser) {
-        mappedAppointments = mappedAppointments.filter(a => a.expertId === adminUser.id);
+        mappedAppointments = mappedAppointments.filter((a: Appointment) => a.expertId === adminUser.id && a.status !== 'completed');
       }
 
       setAppointments(mappedAppointments);
@@ -379,6 +384,31 @@ export function AppointmentManagement({ adminUser }: Props) {
     setShowStatusModal(false);
   };
 
+  const handlePhoneInfoClick = async (appointment: Appointment) => {
+    // Sadece "Benim randevularım" tabında çalışsın
+    if (filter !== 'my') return;
+
+    setSelectedAppointmentForPhone(appointment);
+    setShowPhoneInfoModal(true);
+    setLoadingPhoneInfo(true);
+    setPhoneInfo(null);
+
+    try {
+      const response = await fetch(`/api/appointments/${appointment.id}/phone-info`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Telefon bilgileri alınamadı' }));
+        throw new Error(errorData.error || 'Telefon bilgileri alınamadı');
+      }
+      const data = await response.json();
+      setPhoneInfo(data);
+    } catch (error) {
+      console.error('Error fetching phone info:', error);
+      setPhoneInfo({ phones: [], message: error instanceof Error ? error.message : 'Telefon bilgileri alınırken hata oluştu' });
+    } finally {
+      setLoadingPhoneInfo(false);
+    }
+  };
+
   const checkExpertAvailability = async (
     expertId: number,
     appointmentDate: string,
@@ -603,7 +633,8 @@ export function AppointmentManagement({ adminUser }: Props) {
     let result = appointments;
 
     if (filter === 'my' && adminUser) {
-      result = result.filter(a => a.expertId === adminUser.id);
+      // Benim randevularım tabında tamamlanan randevular gözükmemeli
+      result = result.filter(a => a.expertId === adminUser.id && a.status !== 'completed');
     } else if (filter !== 'all') {
       result = result.filter(a => a.status === filter);
     }
@@ -729,7 +760,12 @@ export function AppointmentManagement({ adminUser }: Props) {
                 </thead>
                 <tbody>
                   {paginatedAppointments.map((apt) => (
-                    <tr key={apt.id} className="border-t hover:bg-gray-50">
+                    <tr 
+                      key={apt.id} 
+                      className={`border-t hover:bg-gray-50 ${filter === 'my' ? 'cursor-pointer' : ''}`}
+                      onClick={() => filter === 'my' && handlePhoneInfoClick(apt)}
+                      title={filter === 'my' ? 'Telefon bilgilerini görmek için tıklayın' : ''}
+                    >
                       <td className="px-4 lg:px-6 py-3 text-sm">{apt.userName}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono text-xs">{apt.userPhone}</td>
                       <td className="px-4 lg:px-6 py-3 text-sm font-mono">{apt.ticketNo || '-'}</td>
@@ -750,7 +786,7 @@ export function AppointmentManagement({ adminUser }: Props) {
                           <span className="hidden sm:inline">{apt.status === 'pending' ? 'Beklemede' : apt.status === 'approved' ? 'Onaylı' : apt.status === 'completed' ? 'Tamamlandı' : 'İptal'}</span>
                         </span>
                       </td>
-                      <td className="px-4 lg:px-6 py-3 space-x-1 sm:space-x-2">
+                      <td className="px-4 lg:px-6 py-3 space-x-1 sm:space-x-2" onClick={(e) => e.stopPropagation()}>
                         {apt.status === 'pending' && (
                           <>
                             <button
@@ -819,7 +855,12 @@ export function AppointmentManagement({ adminUser }: Props) {
           {/* Mobile Card View */}
           <div className="md:hidden space-y-3">
             {paginatedAppointments.map((apt) => (
-              <div key={apt.id} className="bg-white rounded-lg shadow p-4 space-y-3">
+              <div 
+                key={apt.id} 
+                className={`bg-white rounded-lg shadow p-4 space-y-3 ${filter === 'my' ? 'cursor-pointer' : ''}`}
+                onClick={() => filter === 'my' && handlePhoneInfoClick(apt)}
+                title={filter === 'my' ? 'Telefon bilgilerini görmek için tıklayın' : ''}
+              >
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-gray-900">{apt.userName}</p>
@@ -846,7 +887,7 @@ export function AppointmentManagement({ adminUser }: Props) {
                 </div>
 
                 {apt.status === 'pending' && (
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleApprove(apt.id)}
                       className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-semibold py-2 rounded transition"
@@ -870,7 +911,7 @@ export function AppointmentManagement({ adminUser }: Props) {
                 )}
 
                 {apt.status === 'approved' && (
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleRemindAppointment(apt.id)}
                       className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
@@ -890,7 +931,7 @@ export function AppointmentManagement({ adminUser }: Props) {
                 )}
 
                 {apt.status === 'cancelled' && (
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleDelete(apt.id)}
                       className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold py-2 rounded transition inline-flex items-center justify-center gap-2"
@@ -985,6 +1026,86 @@ export function AppointmentManagement({ adminUser }: Props) {
                   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition"
                 >
                   Vazgeç
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phone Info Modal */}
+      {showPhoneInfoModal && selectedAppointmentForPhone && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowPhoneInfoModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Telefon Bilgileri</h3>
+                <button
+                  onClick={() => setShowPhoneInfoModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mb-6 p-3 bg-gray-50 rounded">
+                <p className="text-sm font-medium text-gray-900">{selectedAppointmentForPhone.userName}</p>
+                <p className="text-xs text-gray-600">{selectedAppointmentForPhone.userEmail}</p>
+                <p className="text-xs text-gray-600">{selectedAppointmentForPhone.date} - {selectedAppointmentForPhone.time}</p>
+              </div>
+
+              {loadingPhoneInfo ? (
+                <div className="text-center py-8 text-gray-500">Yükleniyor...</div>
+              ) : phoneInfo ? (
+                <>
+                  {phoneInfo.phones && phoneInfo.phones.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-sm text-blue-800 font-medium mb-2">
+                          {phoneInfo.phones.length} adet telefon bulundu
+                        </p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100">
+                              <th className="px-4 py-2 text-left text-sm font-semibold border">Envanter No</th>
+                              <th className="px-4 py-2 text-left text-sm font-semibold border">Marka</th>
+                              <th className="px-4 py-2 text-left text-sm font-semibold border">Model</th>
+                              <th className="px-4 py-2 text-left text-sm font-semibold border">IMEI1</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {phoneInfo.phones.map((phone, index) => (
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 text-sm border font-mono">{phone.inventory_number}</td>
+                                <td className="px-4 py-2 text-sm border">{phone.brand}</td>
+                                <td className="px-4 py-2 text-sm border">{phone.model}</td>
+                                <td className="px-4 py-2 text-sm border font-mono">{phone.imei1}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-2">
+                        {phoneInfo.message || 'Bu çalışana atanmış telefon bulunamadı'}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">Bilgi yüklenemedi</div>
+              )}
+
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowPhoneInfoModal(false)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition"
+                >
+                  Kapat
                 </button>
               </div>
             </div>

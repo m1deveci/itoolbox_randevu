@@ -1188,7 +1188,7 @@ async function sendRescheduleRequestEmail(pool, appointment, expert, newDate, ne
     const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:4040';
     // Token is already hex (0-9, a-f), no need to encode
     const approveUrl = `${apiBaseUrl}/api/appointments/${appointment.id}/reschedule-approve/${token}`;
-    const rejectUrl = `${apiBaseUrl}/api/appointments/${appointment.id}/reschedule-reject/${token}`;
+    const rejectUrl = `${apiBaseUrl}/api/appointments/${appointment.id}/reschedule-reject/${token}?reason=Kullanıcı%20onay%20vermedi`;
 
     const subject = `${siteTitle} - Randevu Tarih Değişikliği Talebi`;
     const text = `

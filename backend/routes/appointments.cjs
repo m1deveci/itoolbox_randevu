@@ -1385,7 +1385,14 @@ module.exports = (pool) => {
     
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = req.params.token;
+      let token = req.params.token;
+
+      // Decode token if URL encoded
+      try {
+        token = decodeURIComponent(token);
+      } catch (e) {
+        // If decode fails, use original
+      }
 
       console.log('Reschedule approve request:', {
         appointmentId,
@@ -1674,12 +1681,21 @@ module.exports = (pool) => {
     
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = req.params.token;
+      let token = req.params.token;
+      const rejectionReason = req.query.reason ? decodeURIComponent(req.query.reason) : 'Kullanıcı onay vermedi';
+
+      // Decode token if URL encoded
+      try {
+        token = decodeURIComponent(token);
+      } catch (e) {
+        // If decode fails, use original
+      }
 
       console.log('Reschedule reject request:', {
         appointmentId,
         token: token,
-        tokenLength: token.length
+        tokenLength: token.length,
+        rejectionReason: rejectionReason
       });
 
       // First, check if appointment exists and get current status
@@ -1789,12 +1805,12 @@ module.exports = (pool) => {
 
       const appointment = fullAppointments[0];
 
-      // Update reschedule status to rejected
+      // Update reschedule status to rejected with rejection reason
       await pool.execute(
-        `UPDATE appointments 
-         SET reschedule_status = 'rejected', reschedule_token = NULL
+        `UPDATE appointments
+         SET reschedule_status = 'rejected', reschedule_token = NULL, reschedule_rejection_reason = ?
          WHERE id = ?`,
-        [appointmentId]
+        [rejectionReason, appointmentId]
       );
 
       // Create notification for user
@@ -1813,7 +1829,7 @@ module.exports = (pool) => {
               current_time: appointment.appointment_time,
               rejected_new_date: appointment.reschedule_new_date,
               rejected_new_time: appointment.reschedule_new_time,
-              reason: appointment.reschedule_reason,
+              rejection_reason: rejectionReason,
               expert_name: appointment.expert_name
             })
           ]
@@ -1832,14 +1848,14 @@ module.exports = (pool) => {
             appointment.expert_email,
             appointmentId,
             'Randevu Tarih Değişikliği Reddedildi',
-            `Randevu talebinin tarih değişikliği kullanıcı tarafından reddedilmiştir.`,
+            `Randevu talebinin tarih değişikliği kullanıcı tarafından reddedilmiştir. Sebep: ${rejectionReason}`,
             JSON.stringify({
               appointment_id: appointmentId,
               current_date: appointment.appointment_date,
               current_time: appointment.appointment_time,
               rejected_new_date: appointment.reschedule_new_date,
               rejected_new_time: appointment.reschedule_new_time,
-              reason: appointment.reschedule_reason,
+              rejection_reason: rejectionReason,
               user_name: appointment.user_name,
               user_email: appointment.user_email,
               ticket_no: appointment.ticket_no
@@ -1856,7 +1872,7 @@ module.exports = (pool) => {
       await sendRescheduleRejectionEmail(pool, appointment, {
         name: appointment.expert_name,
         email: appointment.expert_email
-      }, appointment.reschedule_new_date, appointment.reschedule_new_time, appointment.reschedule_reason).catch(error => {
+      }, appointment.reschedule_new_date, appointment.reschedule_new_time, rejectionReason).catch(error => {
         console.error('Error sending reschedule rejection email to user:', error);
       });
 
@@ -1864,7 +1880,7 @@ module.exports = (pool) => {
       await sendRescheduleRejectionToExpert(pool, appointment, {
         name: appointment.expert_name,
         email: appointment.expert_email
-      }, appointment.reschedule_new_date, appointment.reschedule_new_time, appointment.reschedule_reason).catch(error => {
+      }, appointment.reschedule_new_date, appointment.reschedule_new_time, rejectionReason).catch(error => {
         console.error('Error sending reschedule rejection email to expert:', error);
       });
 

@@ -1096,10 +1096,6 @@ module.exports = (pool) => {
         return res.status(409).json({ error: 'Bu saat için başka bir randevu bulunmaktadır' });
       }
 
-      // Generate unique token for reschedule request
-      const crypto = require('crypto');
-      const rescheduleToken = crypto.randomBytes(32).toString('hex');
-
       // Store reschedule request in appointments table (add columns if needed)
       // Check if columns exist, if not add them
       try {
@@ -1127,14 +1123,188 @@ module.exports = (pool) => {
         console.log('Note: Reschedule columns check/creation:', alterError.message);
       }
 
+      // Generate unique token for reschedule request (AFTER ensuring columns exist)
+      const crypto = require('crypto');
+      let rescheduleToken;
+      let tokenGenerated = false;
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      // Ensure token is generated successfully
+      while (!tokenGenerated && attempts < maxAttempts) {
+        try {
+          rescheduleToken = crypto.randomBytes(32).toString('hex');
+          if (rescheduleToken && rescheduleToken.length === 64) {
+            tokenGenerated = true;
+            console.log('Token generated successfully:', {
+              appointmentId,
+              token: rescheduleToken,
+              tokenLength: rescheduleToken.length,
+              attempt: attempts + 1
+            });
+          } else {
+            attempts++;
+            console.warn('Token generation failed, retrying...', {
+              appointmentId,
+              attempt: attempts,
+              tokenLength: rescheduleToken ? rescheduleToken.length : 0
+            });
+          }
+        } catch (tokenError) {
+          attempts++;
+          console.error('Error generating token:', tokenError);
+          if (attempts >= maxAttempts) {
+            return res.status(500).json({ error: 'Token oluşturulamadı. Lütfen tekrar deneyin.' });
+          }
+        }
+      }
+
+      if (!tokenGenerated || !rescheduleToken) {
+        console.error('Failed to generate token after max attempts', { appointmentId, attempts });
+        return res.status(500).json({ error: 'Token oluşturulamadı. Lütfen tekrar deneyin.' });
+      }
+
       // Update appointment with reschedule request
-      await pool.execute(
-        `UPDATE appointments 
-         SET reschedule_token = ?, reschedule_new_date = ?, reschedule_new_time = ?, 
-             reschedule_reason = ?, reschedule_status = 'pending'
-         WHERE id = ?`,
-        [rescheduleToken, newDate, newTime, reason, appointmentId]
-      );
+      // Use a transaction to ensure atomicity
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        // First, check current appointment state
+        const [beforeUpdate] = await connection.execute(
+          `SELECT id, status, reschedule_token, reschedule_status FROM appointments WHERE id = ?`,
+          [appointmentId]
+        );
+        console.log('Before update - appointment state:', {
+          appointmentId,
+          status: beforeUpdate[0]?.status,
+          currentToken: beforeUpdate[0]?.reschedule_token,
+          currentRescheduleStatus: beforeUpdate[0]?.reschedule_status
+        });
+
+        // Verify token is valid before update
+        if (!rescheduleToken || rescheduleToken.length !== 64) {
+          await connection.rollback();
+          console.error('Invalid token before update:', {
+            appointmentId,
+            token: rescheduleToken,
+            tokenLength: rescheduleToken ? rescheduleToken.length : 0
+          });
+          return res.status(500).json({ error: 'Geçersiz token. Lütfen tekrar deneyin.' });
+        }
+
+        console.log('Attempting to update with token:', {
+          appointmentId,
+          token: rescheduleToken,
+          tokenLength: rescheduleToken.length,
+          newDate,
+          newTime,
+          reason: reason.substring(0, 50) + '...'
+        });
+
+        const [updateResult] = await connection.execute(
+          `UPDATE appointments 
+           SET reschedule_token = ?, reschedule_new_date = ?, reschedule_new_time = ?, 
+               reschedule_reason = ?, reschedule_status = 'pending'
+           WHERE id = ? AND status = 'approved'`,
+          [rescheduleToken, newDate, newTime, reason, appointmentId]
+        );
+
+        console.log('Token update result:', {
+          appointmentId,
+          affectedRows: updateResult.affectedRows,
+          changedRows: updateResult.changedRows,
+          token: rescheduleToken,
+          tokenLength: rescheduleToken.length,
+          warningCount: updateResult.warningCount || 0
+        });
+
+        if (updateResult.affectedRows === 0) {
+          await connection.rollback();
+          console.error('No rows affected when updating reschedule token!', {
+            appointmentId,
+            token: rescheduleToken,
+            appointmentStatus: appointment.status
+          });
+          return res.status(404).json({ error: 'Randevu bulunamadı veya güncellenemedi' });
+        }
+
+        // Verify token was saved correctly BEFORE committing
+        const [verifyToken] = await connection.execute(
+          `SELECT reschedule_token, reschedule_status, status FROM appointments WHERE id = ?`,
+          [appointmentId]
+        );
+        
+        if (verifyToken.length === 0) {
+          await connection.rollback();
+          console.error('Appointment not found after update!', { appointmentId });
+          return res.status(404).json({ error: 'Randevu bulunamadı' });
+        }
+
+        const savedToken = verifyToken[0]?.reschedule_token;
+        console.log('Token saved and verified (before commit):', {
+          appointmentId,
+          originalToken: rescheduleToken,
+          savedToken: savedToken,
+          savedTokenLength: savedToken ? savedToken.length : 0,
+          tokenLength: rescheduleToken.length,
+          match: savedToken === rescheduleToken,
+          status: verifyToken[0]?.reschedule_status,
+          appointmentStatus: verifyToken[0]?.status
+        });
+
+        if (!savedToken || savedToken !== rescheduleToken) {
+          await connection.rollback();
+          console.error('Token mismatch after save!', {
+            appointmentId,
+            originalToken: rescheduleToken,
+            savedToken: savedToken,
+            originalLength: rescheduleToken.length,
+            savedLength: savedToken ? savedToken.length : 0
+          });
+          return res.status(500).json({ error: 'Token kaydedilemedi. Lütfen tekrar deneyin.' });
+        }
+
+        // Commit the transaction
+        await connection.commit();
+        console.log('Transaction committed successfully for reschedule request:', {
+          appointmentId,
+          token: rescheduleToken
+        });
+
+        // Verify token AFTER commit to ensure it's persisted
+        const [finalCheck] = await pool.execute(
+          `SELECT reschedule_token, reschedule_status, status FROM appointments WHERE id = ?`,
+          [appointmentId]
+        );
+        
+        if (finalCheck.length > 0) {
+          const finalToken = finalCheck[0]?.reschedule_token;
+          console.log('Final token verification (after commit):', {
+            appointmentId,
+            originalToken: rescheduleToken,
+            finalToken: finalToken,
+            finalTokenLength: finalToken ? finalToken.length : 0,
+            match: finalToken === rescheduleToken,
+            status: finalCheck[0]?.reschedule_status
+          });
+
+          if (!finalToken || finalToken !== rescheduleToken) {
+            console.error('CRITICAL: Token lost after commit!', {
+              appointmentId,
+              originalToken: rescheduleToken,
+              finalToken: finalToken
+            });
+            // Don't fail here, but log the issue
+          }
+        }
+      } catch (transactionError) {
+        await connection.rollback();
+        console.error('Transaction error when saving reschedule token:', transactionError);
+        throw transactionError;
+      } finally {
+        connection.release();
+      }
 
       // Send email to user with approve/reject links
       const { sendRescheduleRequestEmail } = require('../utils/emailHelper.cjs');
@@ -1188,9 +1358,21 @@ module.exports = (pool) => {
   router.get('/:id/reschedule-approve/:token', async (req, res) => {
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = decodeURIComponent(req.params.token);
+      let token = req.params.token;
+      
+      // Try to decode, but if it fails, use original
+      try {
+        token = decodeURIComponent(token);
+      } catch (e) {
+        console.log('Token decode failed, using original:', e.message);
+      }
 
-      console.log('Reschedule approve request:', { appointmentId, token });
+      console.log('Reschedule approve request:', { 
+        appointmentId, 
+        rawToken: req.params.token,
+        decodedToken: token,
+        tokenLength: token.length
+      });
 
       // First, check if appointment exists and get current status
       const [appointmentCheck] = await pool.execute(
@@ -1213,21 +1395,90 @@ module.exports = (pool) => {
       }
 
       const currentAppointment = appointmentCheck[0];
-      console.log('Current appointment status:', {
+      
+      // Normalize tokens for comparison (trim whitespace, handle null)
+      const dbToken = currentAppointment.reschedule_token ? String(currentAppointment.reschedule_token).trim() : null;
+      const requestToken = token ? String(token).trim() : null;
+      
+      // Also try without decode (in case it's double-encoded)
+      let requestTokenAlt = null;
+      try {
+        requestTokenAlt = decodeURIComponent(String(token).trim());
+      } catch (e) {
+        // Already decoded or not encoded
+      }
+      
+      console.log('Current appointment status (approve):', {
         id: currentAppointment.id,
-        token: currentAppointment.reschedule_token,
+        dbToken: dbToken,
+        dbTokenLength: dbToken ? dbToken.length : 0,
+        requestToken: requestToken,
+        requestTokenLength: requestToken ? requestToken.length : 0,
+        requestTokenAlt: requestTokenAlt,
+        requestTokenAltLength: requestTokenAlt ? requestTokenAlt.length : 0,
         status: currentAppointment.reschedule_status,
-        tokenMatch: currentAppointment.reschedule_token === token
+        tokenMatch: dbToken === requestToken,
+        tokenMatchAlt: dbToken === requestTokenAlt,
+        tokenEqual: dbToken && requestToken && dbToken === requestToken,
+        dbTokenFirst10: dbToken ? dbToken.substring(0, 10) : null,
+        requestTokenFirst10: requestToken ? requestToken.substring(0, 10) : null
       });
 
-      // Check if token matches and status is pending
-      if (!currentAppointment.reschedule_token || currentAppointment.reschedule_token !== token) {
+      // Check if token matches (try multiple decoding strategies)
+      let tokenMatches = false;
+      
+      if (dbToken && requestToken) {
+        // Direct comparison
+        if (dbToken === requestToken) {
+          tokenMatches = true;
+        }
+        // Try with decodeURIComponent (alternative)
+        else if (requestTokenAlt && dbToken === requestTokenAlt) {
+          tokenMatches = true;
+        }
+        // Try decoding the dbToken (in case it was stored encoded)
+        else {
+          try {
+            const decodedDbToken = decodeURIComponent(dbToken);
+            if (decodedDbToken === requestToken || (requestTokenAlt && decodedDbToken === requestTokenAlt)) {
+              tokenMatches = true;
+            }
+          } catch (e) {
+            // dbToken is not encoded, continue
+          }
+        }
+        // Try case-insensitive comparison (shouldn't be needed for hex, but just in case)
+        if (!tokenMatches && dbToken.toLowerCase() === requestToken.toLowerCase()) {
+          tokenMatches = true;
+        }
+      }
+      
+      if (!dbToken || !tokenMatches) {
+        console.error('Token mismatch (approve):', {
+          dbToken: dbToken,
+          dbTokenLength: dbToken ? dbToken.length : 0,
+          requestToken: requestToken,
+          requestTokenLength: requestToken ? requestToken.length : 0,
+          requestTokenAlt: requestTokenAlt,
+          requestTokenAltLength: requestTokenAlt ? requestTokenAlt.length : 0,
+          dbTokenType: typeof dbToken,
+          requestTokenType: typeof requestToken,
+          dbTokenFirst20: dbToken ? dbToken.substring(0, 20) : null,
+          requestTokenFirst20: requestToken ? requestToken.substring(0, 20) : null,
+          dbTokenLast20: dbToken ? dbToken.substring(dbToken.length - 20) : null,
+          requestTokenLast20: requestToken ? requestToken.substring(requestToken.length - 20) : null
+        });
         return res.status(404).send(`
           <html>
             <head><title>Geçersiz İstek</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1 style="color: #ef4444;">Geçersiz Token</h1>
               <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                Token uzunlukları: DB=${dbToken ? dbToken.length : 'null'}, Request=${requestToken ? requestToken.length : 'null'}<br>
+                DB Token (ilk 10): ${dbToken ? dbToken.substring(0, 10) : 'null'}<br>
+                Request Token (ilk 10): ${requestToken ? requestToken.substring(0, 10) : 'null'}
+              </p>
             </body>
           </html>
         `);
@@ -1363,9 +1614,21 @@ module.exports = (pool) => {
   router.get('/:id/reschedule-reject/:token', async (req, res) => {
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = decodeURIComponent(req.params.token);
+      let token = req.params.token;
+      
+      // Try to decode, but if it fails, use original
+      try {
+        token = decodeURIComponent(token);
+      } catch (e) {
+        console.log('Token decode failed, using original:', e.message);
+      }
 
-      console.log('Reschedule reject request:', { appointmentId, token });
+      console.log('Reschedule reject request:', { 
+        appointmentId, 
+        rawToken: req.params.token,
+        decodedToken: token,
+        tokenLength: token.length
+      });
 
       // First, check if appointment exists and get current status
       const [appointmentCheck] = await pool.execute(
@@ -1388,21 +1651,70 @@ module.exports = (pool) => {
       }
 
       const currentAppointment = appointmentCheck[0];
-      console.log('Current appointment status:', {
+      
+      // Normalize tokens for comparison (trim whitespace, handle null)
+      const dbToken = currentAppointment.reschedule_token ? currentAppointment.reschedule_token.trim() : null;
+      const requestToken = token ? token.trim() : null;
+      
+      console.log('Current appointment status (reject):', {
         id: currentAppointment.id,
-        token: currentAppointment.reschedule_token,
+        dbToken: dbToken,
+        dbTokenLength: dbToken ? dbToken.length : 0,
+        requestToken: requestToken,
+        requestTokenLength: requestToken ? requestToken.length : 0,
         status: currentAppointment.reschedule_status,
-        tokenMatch: currentAppointment.reschedule_token === token
+        tokenMatch: dbToken === requestToken,
+        tokenEqual: dbToken && requestToken && dbToken === requestToken
       });
 
-      // Check if token matches and status is pending
-      if (!currentAppointment.reschedule_token || currentAppointment.reschedule_token !== token) {
+      // Check if token matches (try multiple decoding strategies)
+      let tokenMatches = false;
+      
+      if (dbToken && requestToken) {
+        // Direct comparison
+        if (dbToken === requestToken) {
+          tokenMatches = true;
+        }
+        // Try with decodeURIComponent
+        else {
+          try {
+            const requestTokenAlt = decodeURIComponent(String(token).trim());
+            if (dbToken === requestTokenAlt) {
+              tokenMatches = true;
+            }
+          } catch (e) {
+            // Already decoded or not encoded
+          }
+        }
+        // Try case-insensitive comparison
+        if (!tokenMatches && dbToken.toLowerCase() === requestToken.toLowerCase()) {
+          tokenMatches = true;
+        }
+      }
+
+      if (!tokenMatches) {
+        console.error('Token mismatch (reject):', {
+          dbToken: dbToken,
+          dbTokenLength: dbToken ? dbToken.length : 0,
+          requestToken: requestToken,
+          requestTokenLength: requestToken ? requestToken.length : 0,
+          dbTokenType: typeof dbToken,
+          requestTokenType: typeof requestToken,
+          dbTokenFirst20: dbToken ? dbToken.substring(0, 20) : null,
+          requestTokenFirst20: requestToken ? requestToken.substring(0, 20) : null,
+          rawTokenFromUrl: req.params.token
+        });
         return res.status(404).send(`
           <html>
             <head><title>Geçersiz İstek</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1 style="color: #ef4444;">Geçersiz Token</h1>
               <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                Token uzunlukları: DB=${dbToken ? dbToken.length : 'null'}, Request=${requestToken ? requestToken.length : 'null'}<br>
+                DB Token (ilk 10): ${dbToken ? dbToken.substring(0, 10) : 'null'}<br>
+                Request Token (ilk 10): ${requestToken ? requestToken.substring(0, 10) : 'null'}
+              </p>
             </body>
           </html>
         `);
@@ -1421,26 +1733,6 @@ module.exports = (pool) => {
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1 style="color: #f59e0b;">${statusMessage}</h1>
               <p>Durum: ${currentAppointment.reschedule_status}</p>
-            </body>
-          </html>
-        `);
-      }
-
-      // Get full appointment details
-      const [appointments] = await pool.execute(
-        `SELECT a.id, a.reschedule_status, a.reschedule_token
-         FROM appointments a
-         WHERE a.id = ?`,
-        [appointmentId]
-      );
-
-      if (appointments.length === 0) {
-        return res.status(404).send(`
-          <html>
-            <head><title>Geçersiz İstek</title></head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-              <h1 style="color: #ef4444;">Geçersiz veya Süresi Dolmuş İstek</h1>
-              <p>Bu tarih değişikliği talebi geçersiz veya süresi dolmuş olabilir.</p>
             </body>
           </html>
         `);

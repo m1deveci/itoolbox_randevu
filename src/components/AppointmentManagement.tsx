@@ -882,14 +882,30 @@ export function AppointmentManagement({ adminUser }: Props) {
 
       {/* Pending Appointments Card - Only in "Benim Randevularım" tab */}
       {adminUser && filter === 'my' && (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 sm:p-5 shadow-sm">
+        <div 
+          onClick={() => {
+            // Filter to show only pending appointments for current user
+            setFilter('pending');
+            // Update URL to reflect the filter change
+            const newSearchParams = new URLSearchParams(searchParams);
+            newSearchParams.set('filter', 'pending');
+            newSearchParams.set('expertId', adminUser.id.toString());
+            window.history.pushState({}, '', `${window.location.pathname}?${newSearchParams.toString()}`);
+          }}
+          className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 sm:p-5 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+        >
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="bg-yellow-100 rounded-full p-2 sm:p-3">
               <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
             </div>
             <div className="flex-1">
-              <p className="text-xs sm:text-sm text-gray-600 font-medium">Bekleyen Randevu Sayısı</p>
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Onay Bekleyen Randevu Talepleriniz</p>
               <p className="text-2xl sm:text-3xl font-bold text-yellow-700">{pendingCount}</p>
+            </div>
+            <div className="text-yellow-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </div>
         </div>

@@ -268,22 +268,13 @@ export function AvailabilityManager({ adminUser }: Props) {
     const expertId = selectedExpertId || adminUser?.id;
     if (!expertId) return;
 
-    // Calculate targetDate (1 day ahead due to timezone offset)
-    const dateObj = new Date(date + 'T00:00:00');
-    dateObj.setDate(dateObj.getDate() + 1);
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const targetDate = `${year}-${month}-${day}`;
-
     try {
       const response = await fetch(`/api/availability?expertId=${expertId}`);
       if (!response.ok) throw new Error('Failed to fetch availabilities');
       const data = await response.json();
 
-      // Get availability for this specific date
-      // Normalize date format from API (same as in loadAvailabilities)
-      // Check both original date and targetDate (due to timezone offset)
+      // Get availability for this specific date only
+      // No timezone offset adjustment - match exactly to selected date
       const dateAvailabilities = data.filter((a: any) => {
         let dateString = a.availability_date;
         if (typeof dateString === 'string') {
@@ -312,8 +303,8 @@ export function AvailabilityManager({ adminUser }: Props) {
           const day = String(dateObj.getDate()).padStart(2, '0');
           dateString = `${year}-${month}-${day}`;
         }
-        // Check both original date and targetDate (due to timezone offset)
-        return dateString === date || dateString === targetDate;
+        // Check only the selected date (no timezone offset adjustment)
+        return dateString === date;
       });
 
       // Get all time slots from availabilities (exact startTime matches)
@@ -377,19 +368,14 @@ export function AvailabilityManager({ adminUser }: Props) {
     // Store original date for duplicate check (UI shows this date)
     const originalDateForCheck = originalDate;
 
-    // Add 1 day to compensate for timezone offset issue (for backend)
-    const dateObj = new Date(originalDate + 'T00:00:00');
-    dateObj.setDate(dateObj.getDate() + 1);
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const targetDate = `${year}-${month}-${day}`;
+    // Use the selected date directly without timezone offset adjustment
+    const targetDate = originalDate;
 
     // Debug: Log the selected date to verify it's correct
-    console.log('Adding time slot - original date:', originalDate, 'adjusted targetDate:', targetDate, 'timeSlot:', timeSlot);
+    console.log('Adding time slot - date:', originalDate, 'timeSlot:', timeSlot);
 
     // Check if time slot is in the past
-    if (isTimeSlotPast(targetDate, timeSlot)) {
+    if (isTimeSlotPast(originalDate, timeSlot)) {
       await Swal.fire({
         icon: 'warning',
         title: 'Süre Geçti',

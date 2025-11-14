@@ -38,6 +38,7 @@ const appointmentsRouter = require('./routes/appointments.cjs');
 const authRouter = require('./routes/auth.cjs');
 const settingsRouter = require('./routes/settings.cjs');
 const surveysRouter = require('./routes/surveys.cjs');
+const notificationsRouter = require('./routes/notifications.cjs');
 
 // Health check route
 app.get('/api/health', async (req, res) => {
@@ -58,6 +59,7 @@ app.use('/api/availability', availabilityRouter(pool));
 app.use('/api/appointments', appointmentsRouter(pool));
 app.use('/api/settings', settingsRouter(pool));
 app.use('/api/surveys', surveysRouter(pool));
+app.use('/api/notifications', notificationsRouter(pool));
 
 // Basic error handler
 app.use((err, req, res, next) => {

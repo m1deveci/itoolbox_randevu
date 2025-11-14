@@ -1186,8 +1186,9 @@ async function sendRescheduleRequestEmail(pool, appointment, expert, newDate, ne
     });
 
     const baseUrl = process.env.FRONTEND_URL || 'https://randevu.devkit.com.tr';
-    const approveUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-approve/${token}`;
-    const rejectUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-reject/${token}`;
+    const encodedToken = encodeURIComponent(token);
+    const approveUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-approve/${encodedToken}`;
+    const rejectUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-reject/${encodedToken}`;
 
     const subject = `${siteTitle} - Randevu Tarih Değişikliği Talebi`;
     const text = `

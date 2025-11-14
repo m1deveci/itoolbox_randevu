@@ -1188,9 +1188,70 @@ module.exports = (pool) => {
   router.get('/:id/reschedule-approve/:token', async (req, res) => {
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = req.params.token;
+      const token = decodeURIComponent(req.params.token);
 
-      // Get appointment with reschedule request
+      console.log('Reschedule approve request:', { appointmentId, token });
+
+      // First, check if appointment exists and get current status
+      const [appointmentCheck] = await pool.execute(
+        `SELECT a.id, a.reschedule_token, a.reschedule_status, a.reschedule_new_date, a.reschedule_new_time
+         FROM appointments a
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointmentCheck.length === 0) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Randevu Bulunamadı</h1>
+              <p>Belirtilen randevu bulunamadı.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      const currentAppointment = appointmentCheck[0];
+      console.log('Current appointment status:', {
+        id: currentAppointment.id,
+        token: currentAppointment.reschedule_token,
+        status: currentAppointment.reschedule_status,
+        tokenMatch: currentAppointment.reschedule_token === token
+      });
+
+      // Check if token matches and status is pending
+      if (!currentAppointment.reschedule_token || currentAppointment.reschedule_token !== token) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Geçersiz Token</h1>
+              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      if (currentAppointment.reschedule_status !== 'pending') {
+        const statusMessage = currentAppointment.reschedule_status === 'approved' 
+          ? 'Bu tarih değişikliği talebi zaten onaylanmış.'
+          : currentAppointment.reschedule_status === 'rejected'
+          ? 'Bu tarih değişikliği talebi reddedilmiş.'
+          : 'Bu tarih değişikliği talebi işlenemiyor.';
+        
+        return res.status(400).send(`
+          <html>
+            <head><title>İstek İşlenemiyor</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #f59e0b;">${statusMessage}</h1>
+              <p>Durum: ${currentAppointment.reschedule_status}</p>
+            </body>
+          </html>
+        `);
+      }
+
+      // Get full appointment details
       const [appointments] = await pool.execute(
         `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
                 DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
@@ -1200,8 +1261,8 @@ module.exports = (pool) => {
                 COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
          FROM appointments a
          LEFT JOIN experts e ON a.expert_id = e.id
-         WHERE a.id = ? AND a.reschedule_token = ? AND a.reschedule_status = 'pending'`,
-        [appointmentId, token]
+         WHERE a.id = ?`,
+        [appointmentId]
       );
 
       if (appointments.length === 0) {
@@ -1226,6 +1287,31 @@ module.exports = (pool) => {
          WHERE id = ?`,
         [appointment.reschedule_new_date, appointment.reschedule_new_time, appointmentId]
       );
+
+      // Create notification for user
+      try {
+        await pool.execute(
+          `INSERT INTO notifications (user_email, appointment_id, type, title, message, data)
+           VALUES (?, ?, 'reschedule_approved', ?, ?, ?)`,
+          [
+            appointment.user_email,
+            appointmentId,
+            'Randevu Tarih Değişikliği Onaylandı',
+            `Randevu tarihiniz başarıyla güncellendi. Yeni tarih: ${appointment.reschedule_new_date} ${appointment.reschedule_new_time}`,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_date: appointment.appointment_date,
+              old_time: appointment.appointment_time,
+              new_date: appointment.reschedule_new_date,
+              new_time: appointment.reschedule_new_time,
+              expert_name: appointment.expert_name
+            })
+          ]
+        );
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError);
+        // Continue even if notification creation fails
+      }
 
       // Send confirmation email
       const { sendRescheduleConfirmationEmail } = require('../utils/emailHelper.cjs');
@@ -1277,14 +1363,75 @@ module.exports = (pool) => {
   router.get('/:id/reschedule-reject/:token', async (req, res) => {
     try {
       const appointmentId = parseInt(req.params.id);
-      const token = req.params.token;
+      const token = decodeURIComponent(req.params.token);
 
-      // Get appointment with reschedule request
+      console.log('Reschedule reject request:', { appointmentId, token });
+
+      // First, check if appointment exists and get current status
+      const [appointmentCheck] = await pool.execute(
+        `SELECT a.id, a.reschedule_token, a.reschedule_status
+         FROM appointments a
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointmentCheck.length === 0) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Randevu Bulunamadı</h1>
+              <p>Belirtilen randevu bulunamadı.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      const currentAppointment = appointmentCheck[0];
+      console.log('Current appointment status:', {
+        id: currentAppointment.id,
+        token: currentAppointment.reschedule_token,
+        status: currentAppointment.reschedule_status,
+        tokenMatch: currentAppointment.reschedule_token === token
+      });
+
+      // Check if token matches and status is pending
+      if (!currentAppointment.reschedule_token || currentAppointment.reschedule_token !== token) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Geçersiz Token</h1>
+              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      if (currentAppointment.reschedule_status !== 'pending') {
+        const statusMessage = currentAppointment.reschedule_status === 'approved' 
+          ? 'Bu tarih değişikliği talebi zaten onaylanmış.'
+          : currentAppointment.reschedule_status === 'rejected'
+          ? 'Bu tarih değişikliği talebi zaten reddedilmiş.'
+          : 'Bu tarih değişikliği talebi işlenemiyor.';
+        
+        return res.status(400).send(`
+          <html>
+            <head><title>İstek İşlenemiyor</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #f59e0b;">${statusMessage}</h1>
+              <p>Durum: ${currentAppointment.reschedule_status}</p>
+            </body>
+          </html>
+        `);
+      }
+
+      // Get full appointment details
       const [appointments] = await pool.execute(
         `SELECT a.id, a.reschedule_status, a.reschedule_token
          FROM appointments a
-         WHERE a.id = ? AND a.reschedule_token = ? AND a.reschedule_status = 'pending'`,
-        [appointmentId, token]
+         WHERE a.id = ?`,
+        [appointmentId]
       );
 
       if (appointments.length === 0) {
@@ -1334,6 +1481,32 @@ module.exports = (pool) => {
          WHERE id = ?`,
         [appointmentId]
       );
+
+      // Create notification for user
+      try {
+        await pool.execute(
+          `INSERT INTO notifications (user_email, appointment_id, type, title, message, data)
+           VALUES (?, ?, 'reschedule_rejected', ?, ?, ?)`,
+          [
+            appointment.user_email,
+            appointmentId,
+            'Randevu Tarih Değişikliği Reddedildi',
+            `Tarih değişikliği talebiniz reddedildi. Mevcut randevu tarihiniz aynı kalacaktır.`,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              current_date: appointment.appointment_date,
+              current_time: appointment.appointment_time,
+              rejected_new_date: appointment.reschedule_new_date,
+              rejected_new_time: appointment.reschedule_new_time,
+              reason: appointment.reschedule_reason,
+              expert_name: appointment.expert_name
+            })
+          ]
+        );
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError);
+        // Continue even if notification creation fails
+      }
 
       // Send rejection email to user
       const { sendRescheduleRejectionEmail } = require('../utils/emailHelper.cjs');

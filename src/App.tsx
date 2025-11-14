@@ -14,6 +14,12 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
   const location = useLocation();
   const navigate = useNavigate();
   const [notificationCount, setNotificationCount] = useState(0);
+  const [pendingAppointmentCount, setPendingAppointmentCount] = useState(0);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
+  const [showNotificationDetail, setShowNotificationDetail] = useState(false);
 
   // Load pending appointments count for current superadmin
   useEffect(() => {
@@ -25,7 +31,7 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
         if (!response.ok) throw new Error('Failed to fetch appointments');
         const data = await response.json();
         const pendingCount = data.appointments?.filter((a: any) => a.status === 'pending').length || 0;
-        setNotificationCount(pendingCount);
+        setPendingAppointmentCount(pendingCount);
       } catch (error) {
         console.error('Error loading pending count:', error);
       }
@@ -36,6 +42,83 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
     const interval = setInterval(loadPendingCount, 30000);
     return () => clearInterval(interval);
   }, [adminUser]);
+
+  // Load notifications for admin user
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!adminUser?.email) return;
+
+      try {
+        setLoadingNotifications(true);
+        const response = await fetch(`/api/notifications?email=${encodeURIComponent(adminUser.email)}`);
+        if (!response.ok) throw new Error('Failed to fetch notifications');
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+        setNotificationCount(data.unreadCount || 0);
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+      } finally {
+        setLoadingNotifications(false);
+      }
+    };
+
+    loadNotifications();
+    // Refresh every 30 seconds
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [adminUser]);
+
+  // Close notification modal when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showNotificationModal && !target.closest('.notification-dropdown')) {
+        setShowNotificationModal(false);
+      }
+    };
+
+    if (showNotificationModal) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showNotificationModal]);
+
+  const handleNotificationClick = async (notification: any) => {
+    setSelectedNotification(notification);
+    setShowNotificationDetail(true);
+
+    // Mark as read if not already read
+    if (!notification.is_read) {
+      try {
+        await fetch(`/api/notifications/${notification.id}/read`, {
+          method: 'PUT'
+        });
+        // Update local state
+        setNotifications(notifications.map(n => 
+          n.id === notification.id ? { ...n, is_read: true } : n
+        ));
+        setNotificationCount(Math.max(0, notificationCount - 1));
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!adminUser?.email) return;
+
+    try {
+      await fetch('/api/notifications/read-all', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: adminUser.email })
+      });
+      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      setNotificationCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -115,21 +198,104 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
 
             {/* User Info & Logout */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Notification Bell (Superadmin only) */}
-              {adminUser?.role === 'superadmin' && (
+              {/* Notification Bell */}
+              <div className="relative notification-dropdown">
                 <button
-                  onClick={() => navigate(`/admin/randevular?filter=pending&expertId=${adminUser.id}`)}
+                  onClick={() => setShowNotificationModal(!showNotificationModal)}
                   className="relative p-2 text-gray-600 hover:text-blue-600 transition"
-                  title="Bekliyor durumundaki randevular"
+                  title="Bildirimler"
                 >
                   <Bell size={18} />
-                  {notificationCount > 0 && (
+                  {(notificationCount > 0 || (adminUser?.role === 'superadmin' && pendingAppointmentCount > 0)) && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
-                      {notificationCount > 9 ? '9+' : notificationCount}
+                      {notificationCount + (adminUser?.role === 'superadmin' ? pendingAppointmentCount : 0) > 9 
+                        ? '9+' 
+                        : notificationCount + (adminUser?.role === 'superadmin' ? pendingAppointmentCount : 0)}
                     </span>
                   )}
                 </button>
-              )}
+
+                {/* Notification Dropdown */}
+                {showNotificationModal && (
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[500px] overflow-hidden flex flex-col notification-dropdown">
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-900">Bildirimler</h3>
+                      <div className="flex gap-2">
+                        {notificationCount > 0 && (
+                          <button
+                            onClick={handleMarkAllAsRead}
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            Tümünü Okundu İşaretle
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowNotificationModal(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                      {loadingNotifications ? (
+                        <div className="p-4 text-center text-gray-500 text-sm">Yükleniyor...</div>
+                      ) : notifications.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500 text-sm">Bildirim bulunmamaktadır</div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {notifications.map((notif) => (
+                            <button
+                              key={notif.id}
+                              onClick={() => handleNotificationClick(notif)}
+                              className={`w-full text-left p-4 hover:bg-gray-50 transition ${
+                                !notif.is_read ? 'bg-blue-50' : ''
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`flex-shrink-0 w-2 h-2 rounded-full mt-2 ${
+                                  !notif.is_read ? 'bg-blue-500' : 'bg-gray-300'
+                                }`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-sm font-semibold ${
+                                    !notif.is_read ? 'text-gray-900' : 'text-gray-700'
+                                  }`}>
+                                    {notif.title}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                    {notif.message}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    {new Date(notif.created_at).toLocaleString('tr-TR', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {adminUser?.role === 'superadmin' && pendingAppointmentCount > 0 && (
+                      <div className="p-3 border-t border-gray-200 bg-gray-50">
+                        <button
+                          onClick={() => {
+                            setShowNotificationModal(false);
+                            navigate(`/admin/randevular?filter=pending&expertId=${adminUser.id}`);
+                          }}
+                          className="w-full text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          {pendingAppointmentCount} bekleyen randevu görüntüle →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="hidden sm:block text-right">
                 <p className="text-xs font-medium text-gray-900">{adminUser?.name}</p>
                 <p className="text-xs text-gray-500">{adminUser?.role === 'superadmin' ? 'Süper Admin' : 'Admin'}</p>
@@ -163,6 +329,164 @@ function AdminLayout({ adminUser, onLogout }: { adminUser: any; onLogout: () => 
           <Route path="*" element={<Navigate to="/admin/randevular" replace />} />
         </Routes>
       </main>
+
+      {/* Notification Detail Modal */}
+      {showNotificationDetail && selectedNotification && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => {
+            setShowNotificationDetail(false);
+            setSelectedNotification(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">
+                  {selectedNotification.type === 'reschedule_approved' 
+                    ? '✅ Randevu Tarih Değişikliği Onaylandı'
+                    : '❌ Randevu Tarih Değişikliği Reddedildi'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowNotificationDetail(false);
+                    setSelectedNotification(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-900 mb-2">
+                    {selectedNotification.user_name || 'Randevu Sahibi'}
+                  </p>
+                  <p className="text-xs text-gray-600">{selectedNotification.user_email || selectedNotification.user_email}</p>
+                  {selectedNotification.ticket_no && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      <strong>Ticket No:</strong> {selectedNotification.ticket_no}
+                    </p>
+                  )}
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Bildirim Detayı</h4>
+                  <p className="text-sm text-gray-700">{selectedNotification.message}</p>
+                </div>
+
+                {selectedNotification.data && (() => {
+                  try {
+                    const data = typeof selectedNotification.data === 'string' 
+                      ? JSON.parse(selectedNotification.data) 
+                      : selectedNotification.data;
+                    
+                    return (
+                      <div className="space-y-3">
+                        {selectedNotification.type === 'reschedule_approved' ? (
+                          <>
+                            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Eski Randevu</h4>
+                              <p className="text-sm text-gray-700">
+                                <strong>Tarih:</strong> {data.old_date || selectedNotification.appointment_date}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Saat:</strong> {data.old_time || selectedNotification.appointment_time}
+                              </p>
+                            </div>
+                            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Yeni Randevu</h4>
+                              <p className="text-sm text-gray-700">
+                                <strong>Tarih:</strong> {data.new_date}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Saat:</strong> {data.new_time}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Mevcut Randevu</h4>
+                              <p className="text-sm text-gray-700">
+                                <strong>Tarih:</strong> {data.current_date || selectedNotification.appointment_date}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Saat:</strong> {data.current_time || selectedNotification.appointment_time}
+                              </p>
+                            </div>
+                            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Reddedilen Öneri</h4>
+                              <p className="text-sm text-gray-700">
+                                <strong>Tarih:</strong> {data.rejected_new_date}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Saat:</strong> {data.rejected_new_time}
+                              </p>
+                              {data.reason && (
+                                <p className="text-sm text-gray-700 mt-2">
+                                  <strong>Sebep:</strong> {data.reason}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )}
+                        {data.expert_name && (
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-700">
+                              <strong>IT Uzmanı:</strong> {data.expert_name}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } catch (e) {
+                    return null;
+                  }
+                })()}
+
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs text-gray-500">
+                    <strong>Oluşturulma:</strong> {new Date(selectedNotification.created_at).toLocaleString('tr-TR')}
+                  </p>
+                  {selectedNotification.read_at && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      <strong>Okunma:</strong> {new Date(selectedNotification.read_at).toLocaleString('tr-TR')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowNotificationDetail(false);
+                      setSelectedNotification(null);
+                      setShowNotificationModal(false);
+                      navigate(`/admin/randevular`);
+                    }}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+                  >
+                    Randevulara Git
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNotificationDetail(false);
+                      setSelectedNotification(null);
+                    }}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition"
+                  >
+                    Kapat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

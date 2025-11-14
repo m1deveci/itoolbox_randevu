@@ -1084,16 +1084,18 @@ module.exports = (pool) => {
       }
 
       // Check if time slot is already booked
+      // Only block "pending" and "approved" appointments (active appointments)
+      // Don't block "completed" or "cancelled" appointments (past/inactive appointments)
       const [conflicts] = await pool.execute(
         `SELECT id FROM appointments
-         WHERE expert_id = ? AND DATE(appointment_date) = ? 
+         WHERE expert_id = ? AND DATE(appointment_date) = ?
          AND TIME_FORMAT(appointment_time, '%H:%i') = ?
-         AND status != 'cancelled' AND id != ?`,
+         AND (status = 'pending' OR status = 'approved') AND id != ?`,
         [appointment.expert_id, newDate, requestedTimeStr, appointmentId]
       );
 
       if (conflicts.length > 0) {
-        return res.status(409).json({ error: 'Bu saat için başka bir randevu bulunmaktadır' });
+        return res.status(409).json({ error: 'Bu saat için başka bir aktif randevu bulunmaktadır' });
       }
 
       // Store reschedule request in appointments table (add columns if needed)

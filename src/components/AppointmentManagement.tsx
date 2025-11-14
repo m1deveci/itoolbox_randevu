@@ -358,15 +358,8 @@ export function AppointmentManagement({ adminUser }: Props) {
       if (!response.ok) throw new Error('Failed to fetch availability');
       const data = await response.json();
 
-      // Calculate next date (1 day after) to handle timezone offset
-      const dateObj = new Date(date + 'T00:00:00');
-      dateObj.setDate(dateObj.getDate() + 1);
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const nextDate = `${year}-${month}-${day}`;
-
-      // Filter availabilities for this date
+      // Filter availabilities for this date only (no timezone offset adjustment)
+      // The date should match exactly as provided
       const dayAvailabilities = data.filter((a: any) => {
         let dateString = a.availability_date;
         if (typeof dateString === 'string') {
@@ -376,7 +369,7 @@ export function AppointmentManagement({ adminUser }: Props) {
             dateString = dateString.split('T')[0];
           }
         }
-        return dateString === date || dateString === nextDate;
+        return dateString === date;
       });
 
       // Get available time slots

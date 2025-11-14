@@ -1243,12 +1243,12 @@ ${siteTitle}
           Önerilen yeni randevu tarihini kabul etmek istiyorsanız <strong>EVET</strong>, reddetmek istiyorsanız <strong>HAYIR</strong> butonuna tıklayınız.
         </p>
 
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 14px 35px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; margin-right: 30px; margin-bottom: 15px;">
+        <div style="text-align: center; margin: 40px 0;">
+          <a href="${approveUrl}" style="display: block; background-color: #10b981; color: white; padding: 16px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 18px; margin-bottom: 40px; max-width: 300px; margin-left: auto; margin-right: auto;">
             ✓ EVET - Kabul Et
           </a>
-          <br style="display: none;">
-          <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 14px 35px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; margin-top: 15px;">
+          <div style="margin-bottom: 30px; font-size: 14px; color: #9ca3af;">─────────────────────</div>
+          <a href="${rejectUrl}" style="display: block; background-color: #ef4444; color: white; padding: 16px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 18px; max-width: 300px; margin-left: auto; margin-right: auto;">
             ✕ HAYIR - Reddet
           </a>
         </div>

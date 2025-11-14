@@ -1552,6 +1552,33 @@ module.exports = (pool) => {
         }
       }
 
+      // Log activity for approval
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            null,  // No user ID for automated actions
+            'System - Email Link',
+            'approve_reschedule',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_date: appointment.appointment_date,
+              old_time: appointment.appointment_time,
+              new_date: appointment.reschedule_new_date,
+              new_time: appointment.reschedule_new_time,
+              token_verified: true
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging approval activity:', logError);
+      }
+
       // Create notification for user
       try {
         await pool.execute(
@@ -1812,6 +1839,34 @@ module.exports = (pool) => {
          WHERE id = ?`,
         [rejectionReason, appointmentId]
       );
+
+      // Log activity for rejection
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            null,  // No user ID for automated actions
+            'System - Email Link',
+            'reject_reschedule',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_date: appointment.appointment_date,
+              old_time: appointment.appointment_time,
+              rejected_new_date: appointment.reschedule_new_date,
+              rejected_new_time: appointment.reschedule_new_time,
+              rejection_reason: rejectionReason,
+              token_verified: true
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (logError) {
+        console.error('Error logging rejection activity:', logError);
+      }
 
       // Create notification for user
       try {

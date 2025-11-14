@@ -382,11 +382,13 @@ export function AppointmentManagement({ adminUser }: Props) {
       });
 
       // Check for existing appointments
+      // Only block "pending" and "approved" appointments (active appointments)
+      // Don't block "completed" or "cancelled" appointments (past/inactive appointments)
       const apptResponse = await fetch(`/api/appointments?expertId=${expertId}&date=${date}`);
       if (apptResponse.ok) {
         const apptData = await apptResponse.json();
         const bookedTimes = (apptData.appointments || [])
-          .filter((apt: any) => apt.status !== 'cancelled' && apt.id !== selectedAppointmentForReschedule?.id)
+          .filter((apt: any) => (apt.status === 'pending' || apt.status === 'approved') && apt.id !== selectedAppointmentForReschedule?.id)
           .map((apt: any) => apt.time.substring(0, 5));
 
         setAvailableTimes(times.filter(t => !bookedTimes.includes(t)).sort());

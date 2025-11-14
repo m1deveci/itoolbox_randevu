@@ -385,23 +385,14 @@ module.exports = (pool) => {
       const expert = experts[0];
 
       // Check if expert has availability for this date
-      // Get expert's availabilities for this specific date
-      // Also check next day due to timezone offset (AvailabilityManager stores with +1 day offset)
+      // Get expert's availabilities for the specific date selected
       // Use DATE() function to ensure proper date comparison and TIME_FORMAT for time
-      
-      // Calculate next date (1 day after) to handle timezone offset
-      const appointmentDateObj = new Date(appointmentDate + 'T00:00:00');
-      appointmentDateObj.setDate(appointmentDateObj.getDate() + 1);
-      const nextYear = appointmentDateObj.getFullYear();
-      const nextMonth = String(appointmentDateObj.getMonth() + 1).padStart(2, '0');
-      const nextDay = String(appointmentDateObj.getDate()).padStart(2, '0');
-      const nextDate = `${nextYear}-${nextMonth}-${nextDay}`;
-      
+
       const [availabilities] = await pool.execute(
-        `SELECT TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time 
+        `SELECT TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
          FROM availability
-         WHERE expert_id = ? AND (DATE(availability_date) = ? OR DATE(availability_date) = ?)`,
-        [expertId, appointmentDate, nextDate]
+         WHERE expert_id = ? AND DATE(availability_date) = ?`,
+        [expertId, appointmentDate]
       );
 
       if (availabilities.length === 0) {

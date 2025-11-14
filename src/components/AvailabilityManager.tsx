@@ -440,10 +440,9 @@ export function AvailabilityManager({ adminUser }: Props) {
           .filter((time: string) => TIME_SLOTS.includes(time));
         setSelectedTimeSlots([...new Set(availableSlots)].sort());
         
-        // Check if this time slot already exists for the ORIGINAL date (what user sees in UI)
-        // We need to check both originalDate and targetDate because of timezone offset
+        // Check if this time slot already exists for the selected date
         const existing = mappedCheck.find(
-          (a: Availability) => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
+          (a: Availability) => a.availabilityDate === originalDateForCheck &&
           a.startTime === timeSlot
         );
         
@@ -546,10 +545,8 @@ export function AvailabilityManager({ adminUser }: Props) {
 
       // Reload availabilities and time slots from API to ensure UI is in sync
       await loadAvailabilities();
-      
-      // Since backend has data for targetDate (selectedDate + 1 day), we need to manually
-      // update selectedTimeSlots for selectedDate (the date shown in UI)
-      // by fetching fresh data and filtering for selectedDate
+
+      // Update UI with the newly added time slot
       try {
         const refreshResponse = await fetch(`/api/availability?expertId=${expertId}`);
         if (refreshResponse.ok) {
@@ -584,18 +581,16 @@ export function AvailabilityManager({ adminUser }: Props) {
             };
           });
           
-          // Filter for targetDate (the date that was sent to backend, which is selectedDate + 1)
-          // Backend has data for targetDate, so we filter for targetDate to get the data we just added
-          const availabilitiesForTargetDate = mappedRefresh.filter(
-            (a: Availability) => a.availabilityDate === targetDate
+          // Filter for the selected date to get the newly added availability
+          const availabilitiesForSelectedDate = mappedRefresh.filter(
+            (a: Availability) => a.availabilityDate === originalDateForCheck
           );
-          const slotsForTargetDate: string[] = availabilitiesForTargetDate
+          const slotsForSelectedDate: string[] = availabilitiesForSelectedDate
             .map((a: Availability) => a.startTime.substring(0, 5))
             .filter((time: string) => TIME_SLOTS.includes(time));
-          
-          // Update selectedTimeSlots with the slots from targetDate
-          // This will make the UI show the availability even though it's stored for targetDate
-          setSelectedTimeSlots([...new Set(slotsForTargetDate)].sort());
+
+          // Update selectedTimeSlots with the slots from the selected date
+          setSelectedTimeSlots([...new Set(slotsForSelectedDate)].sort());
         }
       } catch (error) {
         console.error('Error refreshing time slots:', error);
@@ -628,13 +623,8 @@ export function AvailabilityManager({ adminUser }: Props) {
     // Store original date (UI shows this date)
     const originalDateForCheck = selectedDate;
 
-    // Calculate targetDate (1 day ahead due to timezone offset)
-    const dateObj = new Date(selectedDate + 'T00:00:00');
-    dateObj.setDate(dateObj.getDate() + 1);
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const targetDate = `${year}-${month}-${day}`;
+    // Use the selected date directly without timezone offset adjustment
+    const targetDate = selectedDate;
 
     // Check if time slot is in the past
     if (isTimeSlotPast(selectedDate, timeSlot)) {
@@ -685,17 +675,17 @@ export function AvailabilityManager({ adminUser }: Props) {
           };
         });
         
-        // Find availability - check both originalDate and targetDate (due to timezone offset)
+        // Find availability for the selected date
         availability = mappedCheck.find(
-          (a: Availability) => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
+          (a: Availability) => a.availabilityDate === originalDateForCheck &&
           a.startTime === timeSlot
         );
       }
     } catch (error) {
       console.error('Error fetching availability for removal:', error);
-      // Fallback to state if API call fails - check both dates
+      // Fallback to state if API call fails
       availability = availabilities.find(
-        a => (a.availabilityDate === originalDateForCheck || a.availabilityDate === targetDate) &&
+        a => a.availabilityDate === originalDateForCheck &&
         a.startTime === timeSlot
       );
     }

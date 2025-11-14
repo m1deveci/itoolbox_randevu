@@ -1202,11 +1202,28 @@ module.exports = (pool) => {
           reason: reason.substring(0, 50) + '...'
         });
 
+        // First, check if there's an existing reschedule request and clear it
+        const [existingCheck] = await connection.execute(
+          `SELECT reschedule_token, reschedule_status FROM appointments WHERE id = ?`,
+          [appointmentId]
+        );
+        
+        if (existingCheck.length > 0 && existingCheck[0].reschedule_token) {
+          console.log('Existing reschedule token found, will be replaced:', {
+            appointmentId,
+            oldToken: existingCheck[0].reschedule_token,
+            oldStatus: existingCheck[0].reschedule_status
+          });
+        }
+
+        // Update appointment with reschedule request
+        // We already checked that status is 'approved' above, so we can safely update
+        // Remove WHERE condition restrictions to ensure update happens
         const [updateResult] = await connection.execute(
           `UPDATE appointments 
            SET reschedule_token = ?, reschedule_new_date = ?, reschedule_new_time = ?, 
                reschedule_reason = ?, reschedule_status = 'pending'
-           WHERE id = ? AND status = 'approved'`,
+           WHERE id = ?`,
           [rescheduleToken, newDate, newTime, reason, appointmentId]
         );
 
@@ -1250,17 +1267,21 @@ module.exports = (pool) => {
           tokenLength: rescheduleToken.length,
           match: savedToken === rescheduleToken,
           status: verifyToken[0]?.reschedule_status,
-          appointmentStatus: verifyToken[0]?.status
+          appointmentStatus: verifyToken[0]?.status,
+          savedTokenType: typeof savedToken,
+          originalTokenType: typeof rescheduleToken
         });
 
+        // If token is NULL, rollback and return error - don't retry
         if (!savedToken || savedToken !== rescheduleToken) {
           await connection.rollback();
-          console.error('Token mismatch after save!', {
+          console.error('Token not saved correctly after update!', {
             appointmentId,
             originalToken: rescheduleToken,
             savedToken: savedToken,
             originalLength: rescheduleToken.length,
-            savedLength: savedToken ? savedToken.length : 0
+            savedLength: savedToken ? savedToken.length : 0,
+            affectedRows: updateResult.affectedRows
           });
           return res.status(500).json({ error: 'Token kaydedilemedi. Lütfen tekrar deneyin.' });
         }
@@ -1356,21 +1377,19 @@ module.exports = (pool) => {
   
   // GET /api/appointments/:id/reschedule-approve/:token - Approve reschedule request
   router.get('/:id/reschedule-approve/:token', async (req, res) => {
+    console.log('=== RESCHEDULE APPROVE ENDPOINT HIT ===');
+    console.log('URL:', req.url);
+    console.log('Path:', req.path);
+    console.log('Params:', req.params);
+    console.log('Query:', req.query);
+    
     try {
       const appointmentId = parseInt(req.params.id);
-      let token = req.params.token;
-      
-      // Try to decode, but if it fails, use original
-      try {
-        token = decodeURIComponent(token);
-      } catch (e) {
-        console.log('Token decode failed, using original:', e.message);
-      }
+      const token = req.params.token;
 
-      console.log('Reschedule approve request:', { 
-        appointmentId, 
-        rawToken: req.params.token,
-        decodedToken: token,
+      console.log('Reschedule approve request:', {
+        appointmentId,
+        token: token,
         tokenLength: token.length
       });
 
@@ -1395,90 +1414,41 @@ module.exports = (pool) => {
       }
 
       const currentAppointment = appointmentCheck[0];
-      
-      // Normalize tokens for comparison (trim whitespace, handle null)
-      const dbToken = currentAppointment.reschedule_token ? String(currentAppointment.reschedule_token).trim() : null;
-      const requestToken = token ? String(token).trim() : null;
-      
-      // Also try without decode (in case it's double-encoded)
-      let requestTokenAlt = null;
-      try {
-        requestTokenAlt = decodeURIComponent(String(token).trim());
-      } catch (e) {
-        // Already decoded or not encoded
-      }
-      
+
+      // Normalize tokens for comparison
+      const dbToken = currentAppointment.reschedule_token ? String(currentAppointment.reschedule_token).toLowerCase().trim() : null;
+      const requestToken = token ? String(token).toLowerCase().trim() : null;
+
       console.log('Current appointment status (approve):', {
         id: currentAppointment.id,
         dbToken: dbToken,
         dbTokenLength: dbToken ? dbToken.length : 0,
         requestToken: requestToken,
         requestTokenLength: requestToken ? requestToken.length : 0,
-        requestTokenAlt: requestTokenAlt,
-        requestTokenAltLength: requestTokenAlt ? requestTokenAlt.length : 0,
         status: currentAppointment.reschedule_status,
         tokenMatch: dbToken === requestToken,
-        tokenMatchAlt: dbToken === requestTokenAlt,
-        tokenEqual: dbToken && requestToken && dbToken === requestToken,
         dbTokenFirst10: dbToken ? dbToken.substring(0, 10) : null,
         requestTokenFirst10: requestToken ? requestToken.substring(0, 10) : null
       });
 
-      // Check if token matches (try multiple decoding strategies)
-      let tokenMatches = false;
-      
-      if (dbToken && requestToken) {
-        // Direct comparison
-        if (dbToken === requestToken) {
-          tokenMatches = true;
-        }
-        // Try with decodeURIComponent (alternative)
-        else if (requestTokenAlt && dbToken === requestTokenAlt) {
-          tokenMatches = true;
-        }
-        // Try decoding the dbToken (in case it was stored encoded)
-        else {
-          try {
-            const decodedDbToken = decodeURIComponent(dbToken);
-            if (decodedDbToken === requestToken || (requestTokenAlt && decodedDbToken === requestTokenAlt)) {
-              tokenMatches = true;
-            }
-          } catch (e) {
-            // dbToken is not encoded, continue
-          }
-        }
-        // Try case-insensitive comparison (shouldn't be needed for hex, but just in case)
-        if (!tokenMatches && dbToken.toLowerCase() === requestToken.toLowerCase()) {
-          tokenMatches = true;
-        }
-      }
-      
+      // Check if token matches
+      const tokenMatches = dbToken && requestToken && dbToken === requestToken;
+
       if (!dbToken || !tokenMatches) {
         console.error('Token mismatch (approve):', {
           dbToken: dbToken,
           dbTokenLength: dbToken ? dbToken.length : 0,
           requestToken: requestToken,
           requestTokenLength: requestToken ? requestToken.length : 0,
-          requestTokenAlt: requestTokenAlt,
-          requestTokenAltLength: requestTokenAlt ? requestTokenAlt.length : 0,
-          dbTokenType: typeof dbToken,
-          requestTokenType: typeof requestToken,
-          dbTokenFirst20: dbToken ? dbToken.substring(0, 20) : null,
-          requestTokenFirst20: requestToken ? requestToken.substring(0, 20) : null,
-          dbTokenLast20: dbToken ? dbToken.substring(dbToken.length - 20) : null,
-          requestTokenLast20: requestToken ? requestToken.substring(requestToken.length - 20) : null
+          appointmentId: appointmentId
         });
         return res.status(404).send(`
           <html>
             <head><title>Geçersiz İstek</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1 style="color: #ef4444;">Geçersiz Token</h1>
-              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
-              <p style="font-size: 12px; color: #666; margin-top: 20px;">
-                Token uzunlukları: DB=${dbToken ? dbToken.length : 'null'}, Request=${requestToken ? requestToken.length : 'null'}<br>
-                DB Token (ilk 10): ${dbToken ? dbToken.substring(0, 10) : 'null'}<br>
-                Request Token (ilk 10): ${requestToken ? requestToken.substring(0, 10) : 'null'}
-              </p>
+              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin veya e-postayı yeniden açmayı deneyin.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 20px;">Sorun devam ederse, sistem yöneticisine başvurunuz.</p>
             </body>
           </html>
         `);
@@ -1531,13 +1501,49 @@ module.exports = (pool) => {
       const appointment = appointments[0];
 
       // Update appointment with new date and time
-      await pool.execute(
+      console.log('Updating appointment to approved status:', {
+        appointmentId,
+        newDate: appointment.reschedule_new_date,
+        newTime: appointment.reschedule_new_time,
+        currentStatus: appointment.reschedule_status
+      });
+
+      const [updateResult] = await pool.execute(
         `UPDATE appointments 
          SET appointment_date = ?, appointment_time = ?, 
              reschedule_status = 'approved', reschedule_token = NULL
          WHERE id = ?`,
         [appointment.reschedule_new_date, appointment.reschedule_new_time, appointmentId]
       );
+
+      console.log('Appointment update result (approve):', {
+        appointmentId,
+        affectedRows: updateResult.affectedRows,
+        changedRows: updateResult.changedRows
+      });
+
+      // Verify the update
+      const [verifyUpdate] = await pool.execute(
+        `SELECT reschedule_status, appointment_date, appointment_time FROM appointments WHERE id = ?`,
+        [appointmentId]
+      );
+
+      if (verifyUpdate.length > 0) {
+        console.log('Verified appointment status after approve:', {
+          appointmentId,
+          rescheduleStatus: verifyUpdate[0].reschedule_status,
+          appointmentDate: verifyUpdate[0].appointment_date,
+          appointmentTime: verifyUpdate[0].appointment_time
+        });
+
+        if (verifyUpdate[0].reschedule_status !== 'approved') {
+          console.error('CRITICAL: Status is not approved after update!', {
+            appointmentId,
+            expected: 'approved',
+            actual: verifyUpdate[0].reschedule_status
+          });
+        }
+      }
 
       // Create notification for user
       try {
@@ -1564,8 +1570,44 @@ module.exports = (pool) => {
         // Continue even if notification creation fails
       }
 
-      // Send confirmation email
-      const { sendRescheduleConfirmationEmail } = require('../utils/emailHelper.cjs');
+      // Create notification for expert
+      try {
+        // Get expert email from database to ensure it's correct
+        const [expertData] = await pool.execute(
+          'SELECT email FROM experts WHERE id = ?',
+          [appointment.expert_id]
+        );
+
+        if (expertData.length > 0 && expertData[0].email) {
+          const expertEmail = expertData[0].email;
+          await pool.execute(
+            `INSERT INTO notifications (user_email, appointment_id, type, title, message, data)
+             VALUES (?, ?, 'reschedule_approved_expert', ?, ?, ?)`,
+            [
+              expertEmail,
+              appointmentId,
+              'Randevu Tarih Değişikliği Onaylandı',
+              `Randevu talebinin tarih değişikliği kullanıcı tarafından onaylanmıştır. Yeni tarih: ${appointment.reschedule_new_date} ${appointment.reschedule_new_time}`,
+              JSON.stringify({
+                appointment_id: appointmentId,
+                old_date: appointment.appointment_date,
+                old_time: appointment.appointment_time,
+                new_date: appointment.reschedule_new_date,
+                new_time: appointment.reschedule_new_time,
+                user_name: appointment.user_name,
+                user_email: appointment.user_email,
+                ticket_no: appointment.ticket_no
+              })
+            ]
+          );
+        }
+      } catch (notifError) {
+        console.error('Error creating notification for expert:', notifError);
+        // Continue even if notification creation fails
+      }
+
+      // Send confirmation email to user
+      const { sendRescheduleConfirmationEmail, sendRescheduleConfirmationToExpert } = require('../utils/emailHelper.cjs');
       await sendRescheduleConfirmationEmail(pool, {
         ...appointment,
         appointment_date: appointment.reschedule_new_date,
@@ -1574,7 +1616,19 @@ module.exports = (pool) => {
         name: appointment.expert_name,
         email: appointment.expert_email
       }, appointment.appointment_date, appointment.appointment_time).catch(error => {
-        console.error('Error sending reschedule confirmation email:', error);
+        console.error('Error sending reschedule confirmation email to user:', error);
+      });
+
+      // Send confirmation email to expert
+      await sendRescheduleConfirmationToExpert(pool, {
+        ...appointment,
+        appointment_date: appointment.reschedule_new_date,
+        appointment_time: appointment.reschedule_new_time
+      }, {
+        name: appointment.expert_name,
+        email: appointment.expert_email
+      }, appointment.appointment_date, appointment.appointment_time).catch(error => {
+        console.error('Error sending reschedule confirmation email to expert:', error);
       });
 
       res.send(`
@@ -1612,21 +1666,19 @@ module.exports = (pool) => {
 
   // GET /api/appointments/:id/reschedule-reject/:token - Reject reschedule request
   router.get('/:id/reschedule-reject/:token', async (req, res) => {
+    console.log('=== RESCHEDULE REJECT ENDPOINT HIT ===');
+    console.log('URL:', req.url);
+    console.log('Path:', req.path);
+    console.log('Params:', req.params);
+    console.log('Query:', req.query);
+    
     try {
       const appointmentId = parseInt(req.params.id);
-      let token = req.params.token;
-      
-      // Try to decode, but if it fails, use original
-      try {
-        token = decodeURIComponent(token);
-      } catch (e) {
-        console.log('Token decode failed, using original:', e.message);
-      }
+      const token = req.params.token;
 
-      console.log('Reschedule reject request:', { 
-        appointmentId, 
-        rawToken: req.params.token,
-        decodedToken: token,
+      console.log('Reschedule reject request:', {
+        appointmentId,
+        token: token,
         tokenLength: token.length
       });
 
@@ -1651,11 +1703,11 @@ module.exports = (pool) => {
       }
 
       const currentAppointment = appointmentCheck[0];
-      
-      // Normalize tokens for comparison (trim whitespace, handle null)
-      const dbToken = currentAppointment.reschedule_token ? currentAppointment.reschedule_token.trim() : null;
-      const requestToken = token ? token.trim() : null;
-      
+
+      // Normalize tokens for comparison
+      const dbToken = currentAppointment.reschedule_token ? String(currentAppointment.reschedule_token).toLowerCase().trim() : null;
+      const requestToken = token ? String(token).toLowerCase().trim() : null;
+
       console.log('Current appointment status (reject):', {
         id: currentAppointment.id,
         dbToken: dbToken,
@@ -1664,33 +1716,12 @@ module.exports = (pool) => {
         requestTokenLength: requestToken ? requestToken.length : 0,
         status: currentAppointment.reschedule_status,
         tokenMatch: dbToken === requestToken,
-        tokenEqual: dbToken && requestToken && dbToken === requestToken
+        dbTokenFirst10: dbToken ? dbToken.substring(0, 10) : null,
+        requestTokenFirst10: requestToken ? requestToken.substring(0, 10) : null
       });
 
-      // Check if token matches (try multiple decoding strategies)
-      let tokenMatches = false;
-      
-      if (dbToken && requestToken) {
-        // Direct comparison
-        if (dbToken === requestToken) {
-          tokenMatches = true;
-        }
-        // Try with decodeURIComponent
-        else {
-          try {
-            const requestTokenAlt = decodeURIComponent(String(token).trim());
-            if (dbToken === requestTokenAlt) {
-              tokenMatches = true;
-            }
-          } catch (e) {
-            // Already decoded or not encoded
-          }
-        }
-        // Try case-insensitive comparison
-        if (!tokenMatches && dbToken.toLowerCase() === requestToken.toLowerCase()) {
-          tokenMatches = true;
-        }
-      }
+      // Check if token matches
+      const tokenMatches = dbToken && requestToken && dbToken === requestToken;
 
       if (!tokenMatches) {
         console.error('Token mismatch (reject):', {
@@ -1698,23 +1729,15 @@ module.exports = (pool) => {
           dbTokenLength: dbToken ? dbToken.length : 0,
           requestToken: requestToken,
           requestTokenLength: requestToken ? requestToken.length : 0,
-          dbTokenType: typeof dbToken,
-          requestTokenType: typeof requestToken,
-          dbTokenFirst20: dbToken ? dbToken.substring(0, 20) : null,
-          requestTokenFirst20: requestToken ? requestToken.substring(0, 20) : null,
-          rawTokenFromUrl: req.params.token
+          appointmentId: appointmentId
         });
         return res.status(404).send(`
           <html>
             <head><title>Geçersiz İstek</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1 style="color: #ef4444;">Geçersiz Token</h1>
-              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin.</p>
-              <p style="font-size: 12px; color: #666; margin-top: 20px;">
-                Token uzunlukları: DB=${dbToken ? dbToken.length : 'null'}, Request=${requestToken ? requestToken.length : 'null'}<br>
-                DB Token (ilk 10): ${dbToken ? dbToken.substring(0, 10) : 'null'}<br>
-                Request Token (ilk 10): ${requestToken ? requestToken.substring(0, 10) : 'null'}
-              </p>
+              <p>Bu tarih değişikliği talebi için geçersiz token. Lütfen e-postanızdaki linki kontrol edin veya e-postayı yeniden açmayı deneyin.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 20px;">Sorun devam ederse, sistem yöneticisine başvurunuz.</p>
             </body>
           </html>
         `);
@@ -1800,13 +1823,49 @@ module.exports = (pool) => {
         // Continue even if notification creation fails
       }
 
+      // Create notification for expert
+      try {
+        await pool.execute(
+          `INSERT INTO notifications (user_email, appointment_id, type, title, message, data)
+           VALUES (?, ?, 'reschedule_rejected_expert', ?, ?, ?)`,
+          [
+            appointment.expert_email,
+            appointmentId,
+            'Randevu Tarih Değişikliği Reddedildi',
+            `Randevu talebinin tarih değişikliği kullanıcı tarafından reddedilmiştir.`,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              current_date: appointment.appointment_date,
+              current_time: appointment.appointment_time,
+              rejected_new_date: appointment.reschedule_new_date,
+              rejected_new_time: appointment.reschedule_new_time,
+              reason: appointment.reschedule_reason,
+              user_name: appointment.user_name,
+              user_email: appointment.user_email,
+              ticket_no: appointment.ticket_no
+            })
+          ]
+        );
+      } catch (notifError) {
+        console.error('Error creating notification for expert:', notifError);
+        // Continue even if notification creation fails
+      }
+
       // Send rejection email to user
-      const { sendRescheduleRejectionEmail } = require('../utils/emailHelper.cjs');
+      const { sendRescheduleRejectionEmail, sendRescheduleRejectionToExpert } = require('../utils/emailHelper.cjs');
       await sendRescheduleRejectionEmail(pool, appointment, {
         name: appointment.expert_name,
         email: appointment.expert_email
       }, appointment.reschedule_new_date, appointment.reschedule_new_time, appointment.reschedule_reason).catch(error => {
-        console.error('Error sending reschedule rejection email:', error);
+        console.error('Error sending reschedule rejection email to user:', error);
+      });
+
+      // Send rejection email to expert
+      await sendRescheduleRejectionToExpert(pool, appointment, {
+        name: appointment.expert_name,
+        email: appointment.expert_email
+      }, appointment.reschedule_new_date, appointment.reschedule_new_time, appointment.reschedule_reason).catch(error => {
+        console.error('Error sending reschedule rejection email to expert:', error);
       });
 
       res.send(`

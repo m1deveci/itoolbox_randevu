@@ -1155,6 +1155,315 @@ Ravago IT Randevu Sistemi
   }
 }
 
+/**
+ * Send reschedule request email to user
+ */
+async function sendRescheduleRequestEmail(pool, appointment, expert, newDate, newTime, reason, token) {
+  try {
+    const siteTitle = await getSiteTitle(pool);
+    
+    // Format dates
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    const formattedOldDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const newDateObj = new Date(newDate + 'T00:00:00');
+    const formattedNewDate = newDateObj.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const baseUrl = process.env.FRONTEND_URL || 'https://randevu.devkit.com.tr';
+    const approveUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-approve/${token}`;
+    const rejectUrl = `${baseUrl}/api/appointments/${appointment.id}/reschedule-reject/${token}`;
+
+    const subject = `${siteTitle} - Randevu Tarih Değişikliği Talebi`;
+    const text = `
+Merhaba ${appointment.user_name},
+
+IT Uzmanı ${expert.name}, randevu talebinizin tarihini değiştirmek istiyor.
+
+Mevcut Randevu:
+- Tarih: ${formattedOldDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+
+Önerilen Yeni Randevu:
+- Tarih: ${formattedNewDate}
+- Saat: ${newTime.substring(0, 5)}
+
+Değişiklik Sebebi:
+${reason}
+
+Önerilen yeni randevu tarihini kabul etmek istiyorsanız EVET, reddetmek istiyorsanız HAYIR butonuna tıklayınız.
+
+Onaylamak için: ${approveUrl}
+Reddetmek için: ${rejectUrl}
+
+İyi günler,
+${siteTitle}
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #3b82f6;">Randevu Tarih Değişikliği Talebi</h2>
+        <p>Merhaba <strong>${appointment.user_name}</strong>,</p>
+        <p>IT Uzmanı <strong>${expert.name}</strong>, randevu talebinizin tarihini değiştirmek istiyor.</p>
+
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #1f2937;">Mevcut Randevu</h3>
+          <p><strong>Tarih:</strong> ${formattedOldDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+        </div>
+
+        <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+          <h3 style="margin-top: 0; color: #1f2937;">Önerilen Yeni Randevu</h3>
+          <p><strong>Tarih:</strong> ${formattedNewDate}</p>
+          <p><strong>Saat:</strong> ${newTime.substring(0, 5)}</p>
+        </div>
+
+        <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <p style="margin: 0; color: #92400e;"><strong>Değişiklik Sebebi:</strong></p>
+          <p style="margin: 10px 0 0 0; color: #92400e;">${reason.replace(/\n/g, '<br>')}</p>
+        </div>
+
+        <p style="font-size: 16px; font-weight: bold; color: #1f2937; margin: 30px 0 20px 0;">
+          Önerilen yeni randevu tarihini kabul etmek istiyorsanız <strong>EVET</strong>, reddetmek istiyorsanız <strong>HAYIR</strong> butonuna tıklayınız.
+        </p>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-right: 10px;">
+            ✓ EVET - Kabul Et
+          </a>
+          <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            ✕ HAYIR - Reddet
+          </a>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi günler,<br>
+          ${siteTitle}
+        </p>
+      </div>
+    `;
+
+    return await sendEmail(pool, {
+      to: appointment.user_email,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending reschedule request email:', error);
+    return false;
+  }
+}
+
+/**
+ * Send reschedule confirmation email to user
+ */
+async function sendRescheduleConfirmationEmail(pool, appointment, expert, oldDate, oldTime) {
+  try {
+    const siteTitle = await getSiteTitle(pool);
+    
+    // Format dates
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    const formattedDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `${siteTitle} - Randevu Tarihiniz Güncellendi - ${formattedDate}`;
+    const text = `
+Merhaba ${appointment.user_name},
+
+Randevu tarihiniz başarıyla güncellendi.
+
+Yeni Randevu Detayları:
+- Tarih: ${formattedDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- IT Uzmanı: ${expert.name}
+- Ticket No: ${appointment.ticket_no}
+
+Randevu tarihinizde hazır olmanızı rica ederiz.
+
+ÖNEMLİ: Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+
+İyi günler,
+${siteTitle}
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #10b981;">Randevu Tarihiniz Güncellendi</h2>
+        <p>Merhaba <strong>${appointment.user_name}</strong>,</p>
+        <p>Randevu tarihiniz başarıyla güncellendi.</p>
+
+        <div style="background-color: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <h3 style="margin-top: 0; color: #1f2937;">Yeni Randevu Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>IT Uzmanı:</strong> ${expert.name}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+        </div>
+
+        <p>Randevu tarihinizde hazır olmanızı rica ederiz.</p>
+
+        <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <p style="margin: 0; color: #92400e; font-size: 14px;">
+            ⚠️ <strong>Önemli:</strong> Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+          </p>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi günler,<br>
+          ${siteTitle}
+        </p>
+      </div>
+    `;
+
+    const icsContent = createICalendarContent(appointment, expert);
+    const attachments = [
+      {
+        filename: `randevu-guncelleme-${appointment.id || 'taslak'}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; method=REQUEST; charset="UTF-8"'
+      }
+    ];
+
+    return await sendEmail(pool, {
+      to: appointment.user_email,
+      subject,
+      text,
+      html,
+      attachments
+    });
+  } catch (error) {
+    console.error('Error sending reschedule confirmation email:', error);
+    return false;
+  }
+}
+
+/**
+ * Send reschedule rejection email to user
+ */
+async function sendRescheduleRejectionEmail(pool, appointment, expert, newDate, newTime, reason) {
+  try {
+    const siteTitle = await getSiteTitle(pool);
+    
+    // Format dates
+    let appointmentDate;
+    if (appointment.appointment_date instanceof Date) {
+      appointmentDate = appointment.appointment_date;
+    } else {
+      appointmentDate = new Date(appointment.appointment_date + 'T00:00:00');
+    }
+
+    const formattedCurrentDate = appointmentDate.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const newDateObj = new Date(newDate + 'T00:00:00');
+    const formattedNewDate = newDateObj.toLocaleDateString('tr-TR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const subject = `${siteTitle} - Randevu Tarih Değişikliği Reddedildi`;
+    const text = `
+Merhaba ${appointment.user_name},
+
+Tarih değişikliği talebiniz reddedildi. Mevcut randevu tarihiniz aynı kalacaktır.
+
+Mevcut Randevu Detayları:
+- Tarih: ${formattedCurrentDate}
+- Saat: ${appointment.appointment_time.substring(0, 5)}
+- IT Uzmanı: ${expert.name}
+- Ticket No: ${appointment.ticket_no}
+
+Önerilen Yeni Tarih (Reddedildi):
+- Tarih: ${formattedNewDate}
+- Saat: ${newTime.substring(0, 5)}
+
+Randevu tarihinizde hazır olmanızı rica ederiz.
+
+ÖNEMLİ: Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+
+İyi günler,
+${siteTitle}
+    `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #ef4444;">Randevu Tarih Değişikliği Reddedildi</h2>
+        <p>Merhaba <strong>${appointment.user_name}</strong>,</p>
+        <p>Tarih değişikliği talebiniz reddedildi. Mevcut randevu tarihiniz aynı kalacaktır.</p>
+
+        <div style="background-color: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <h3 style="margin-top: 0; color: #1f2937;">Mevcut Randevu Detayları</h3>
+          <p><strong>Tarih:</strong> ${formattedCurrentDate}</p>
+          <p><strong>Saat:</strong> ${appointment.appointment_time.substring(0, 5)}</p>
+          <p><strong>IT Uzmanı:</strong> ${expert.name}</p>
+          <p><strong>Ticket No:</strong> ${appointment.ticket_no}</p>
+        </div>
+
+        <div style="background-color: #fee2e2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444;">
+          <h3 style="margin-top: 0; color: #1f2937;">Önerilen Yeni Tarih (Reddedildi)</h3>
+          <p><strong>Tarih:</strong> ${formattedNewDate}</p>
+          <p><strong>Saat:</strong> ${newTime.substring(0, 5)}</p>
+        </div>
+
+        <p>Randevu tarihinizde hazır olmanızı rica ederiz.</p>
+
+        <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <p style="margin: 0; color: #92400e; font-size: 14px;">
+            ⚠️ <strong>Önemli:</strong> Randevu saatinizden 5 dakika önce bulunduğunuz lokasyondaki IT ofisinde olunuz.
+          </p>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          İyi günler,<br>
+          ${siteTitle}
+        </p>
+      </div>
+    `;
+
+    return await sendEmail(pool, {
+      to: appointment.user_email,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending reschedule rejection email:', error);
+    return false;
+  }
+}
+
 module.exports = {
   sendEmail,
   getSiteTitle,
@@ -1166,7 +1475,10 @@ module.exports = {
   sendReassignmentNotificationToNewExpert,
   sendReassignmentNotificationToUser,
   sendAppointmentCompletionToUser,
-  sendAppointmentReminderToUser
+  sendAppointmentReminderToUser,
+  sendRescheduleRequestEmail,
+  sendRescheduleConfirmationEmail,
+  sendRescheduleRejectionEmail
 };
 
 

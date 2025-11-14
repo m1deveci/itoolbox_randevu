@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Trash2, Edit, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Edit, Download, Calendar } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
@@ -50,6 +50,13 @@ export function AppointmentManagement({ adminUser }: Props) {
   const [selectedAppointmentForPhone, setSelectedAppointmentForPhone] = useState<Appointment | null>(null);
   const [phoneInfo, setPhoneInfo] = useState<{ phones: Array<{ inventory_number: string; brand: string; model: string; imei1: string }>; userEmail: string; userId: number; message?: string } | null>(null);
   const [loadingPhoneInfo, setLoadingPhoneInfo] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [selectedAppointmentForReschedule, setSelectedAppointmentForReschedule] = useState<Appointment | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [loadingReschedule, setLoadingReschedule] = useState(false);
 
   // Load experts on mount
   useEffect(() => {
@@ -333,6 +340,147 @@ export function AppointmentManagement({ adminUser }: Props) {
         text: 'Hatırlama e-postası gönderilirken hata oluştu',
         confirmButtonColor: '#ef4444'
       });
+    }
+  };
+
+  const handleReschedule = async (appointment: Appointment) => {
+    setSelectedAppointmentForReschedule(appointment);
+    setRescheduleDate('');
+    setRescheduleTime('');
+    setRescheduleReason('');
+    setAvailableTimes([]);
+    setShowRescheduleModal(true);
+  };
+
+  const loadAvailableTimesForDate = async (expertId: number, date: string) => {
+    try {
+      const response = await fetch(`/api/availability?expertId=${expertId}`);
+      if (!response.ok) throw new Error('Failed to fetch availability');
+      const data = await response.json();
+
+      // Calculate next date (1 day after) to handle timezone offset
+      const dateObj = new Date(date + 'T00:00:00');
+      dateObj.setDate(dateObj.getDate() + 1);
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const nextDate = `${year}-${month}-${day}`;
+
+      // Filter availabilities for this date
+      const dayAvailabilities = data.filter((a: any) => {
+        let dateString = a.availability_date;
+        if (typeof dateString === 'string') {
+          if (dateString.includes(' ')) {
+            dateString = dateString.split(' ')[0];
+          } else if (dateString.includes('T')) {
+            dateString = dateString.split('T')[0];
+          }
+        }
+        return dateString === date || dateString === nextDate;
+      });
+
+      // Get available time slots
+      const times: string[] = [];
+      dayAvailabilities.forEach((avail: any) => {
+        const startTime = avail.start_time ? avail.start_time.substring(0, 5) : '';
+        if (startTime && !times.includes(startTime)) {
+          times.push(startTime);
+        }
+      });
+
+      // Check for existing appointments
+      const apptResponse = await fetch(`/api/appointments?expertId=${expertId}&date=${date}`);
+      if (apptResponse.ok) {
+        const apptData = await apptResponse.json();
+        const bookedTimes = (apptData.appointments || [])
+          .filter((apt: any) => apt.status !== 'cancelled' && apt.id !== selectedAppointmentForReschedule?.id)
+          .map((apt: any) => apt.time.substring(0, 5));
+
+        setAvailableTimes(times.filter(t => !bookedTimes.includes(t)).sort());
+      } else {
+        setAvailableTimes(times.sort());
+      }
+    } catch (error) {
+      console.error('Error loading available times:', error);
+      setAvailableTimes([]);
+    }
+  };
+
+  const handleRescheduleDateChange = (date: string) => {
+    setRescheduleDate(date);
+    setRescheduleTime('');
+    if (selectedAppointmentForReschedule && date) {
+      loadAvailableTimesForDate(selectedAppointmentForReschedule.expertId, date);
+    }
+  };
+
+  const handleSubmitReschedule = async () => {
+    if (!selectedAppointmentForReschedule) return;
+
+    if (!rescheduleDate || !rescheduleTime || !rescheduleReason.trim()) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Eksik Bilgi',
+        text: 'Lütfen yeni tarih, saat ve değişiklik sebebini giriniz',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    if (rescheduleReason.trim().length < 10) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Geçersiz Sebep',
+        text: 'Değişiklik sebebi en az 10 karakter olmalıdır',
+        confirmButtonColor: '#3b82f6'
+      });
+      return;
+    }
+
+    setLoadingReschedule(true);
+    try {
+      const response = await fetch(`/api/appointments/${selectedAppointmentForReschedule.id}/reschedule`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': adminUser?.id?.toString() || '',
+          'x-user-name': encodeURIComponent(adminUser?.name || 'System')
+        },
+        body: JSON.stringify({
+          newDate: rescheduleDate,
+          newTime: rescheduleTime,
+          reason: rescheduleReason.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Tarih değişikliği talebi oluşturulamadı');
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Talebi Gönderildi',
+        text: 'Tarih değişikliği talebi kullanıcıya e-posta ile gönderildi. Kullanıcının onayını bekliyoruz.',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      setShowRescheduleModal(false);
+      setRescheduleDate('');
+      setRescheduleTime('');
+      setRescheduleReason('');
+      setAvailableTimes([]);
+      loadAppointments();
+    } catch (error) {
+      console.error('Error submitting reschedule:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: error instanceof Error ? error.message : 'Tarih değişikliği talebi oluşturulurken hata oluştu',
+        confirmButtonColor: '#ef4444'
+      });
+    } finally {
+      setLoadingReschedule(false);
     }
   };
 
@@ -697,9 +845,55 @@ export function AppointmentManagement({ adminUser }: Props) {
     setCurrentPage(1);
   }, [filter, searchQuery]);
 
+  // Calculate completed appointments count for current expert
+  const completedCount = React.useMemo(() => {
+    if (!adminUser?.id) return 0;
+    return appointments.filter(
+      apt => apt.status === 'completed' && apt.expertId === adminUser.id
+    ).length;
+  }, [appointments, adminUser?.id]);
+
+  // Calculate pending appointments count for current expert
+  const pendingCount = React.useMemo(() => {
+    if (!adminUser?.id) return 0;
+    return appointments.filter(
+      apt => apt.status === 'pending' && apt.expertId === adminUser.id
+    ).length;
+  }, [appointments, adminUser?.id]);
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <h2 className="text-xl sm:text-2xl font-bold">Randevu Yönetimi</h2>
+
+      {/* Completed Appointments Card - Only in "Tamamlananlar" tab */}
+      {adminUser && filter === 'completed' && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="bg-green-100 rounded-full p-2 sm:p-3">
+              <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Tamamlanan Randevular</p>
+              <p className="text-2xl sm:text-3xl font-bold text-green-700">{completedCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Appointments Card - Only in "Benim Randevularım" tab */}
+      {adminUser && filter === 'my' && (
+        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="bg-yellow-100 rounded-full p-2 sm:p-3">
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs sm:text-sm text-gray-600 font-medium">Bekleyen Randevu Sayısı</p>
+              <p className="text-2xl sm:text-3xl font-bold text-yellow-700">{pendingCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter Buttons - Mobile Responsive */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -842,6 +1036,14 @@ export function AppointmentManagement({ adminUser }: Props) {
                               🔔
                             </button>
                             <button
+                              onClick={() => handleReschedule(apt)}
+                              className="text-xs sm:text-sm text-indigo-600 hover:text-indigo-800 font-semibold hover:bg-indigo-50 px-2 py-1 rounded inline-flex items-center gap-1"
+                              title="Tarih Değiştir"
+                            >
+                              <Calendar className="w-3 h-3" />
+                              <span className="hidden sm:inline">Tarih</span>
+                            </button>
+                            <button
                               onClick={() => handleReassign(apt.id)}
                               className="text-xs sm:text-sm text-purple-600 hover:text-purple-800 font-semibold hover:bg-purple-50 px-2 py-1 rounded inline-flex items-center gap-1"
                               title="Atama Değiştir"
@@ -938,12 +1140,19 @@ export function AppointmentManagement({ adminUser }: Props) {
                 )}
 
                 {apt.status === 'approved' && (
-                  <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-wrap gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleRemindAppointment(apt.id)}
                       className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold py-2 rounded transition"
                     >
                       🔔 Hatırlat
+                    </button>
+                    <button
+                      onClick={() => handleReschedule(apt)}
+                      className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold py-2 rounded transition inline-flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      Tarih
                     </button>
                     <button
                       onClick={() => handleReassign(apt.id)}
@@ -1141,6 +1350,104 @@ export function AppointmentManagement({ adminUser }: Props) {
                 >
                   Kapat
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && selectedAppointmentForReschedule && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowRescheduleModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Randevu Tarih Değişikliği</h3>
+                <button
+                  onClick={() => setShowRescheduleModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mb-6 p-3 bg-gray-50 rounded">
+                <p className="text-sm font-medium text-gray-900">{selectedAppointmentForReschedule.userName}</p>
+                <p className="text-xs text-gray-600">{selectedAppointmentForReschedule.userEmail}</p>
+                <p className="text-xs text-gray-600">
+                  <strong>Mevcut Tarih:</strong> {selectedAppointmentForReschedule.date} - {selectedAppointmentForReschedule.time}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Yeni Tarih <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => handleRescheduleDateChange(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Yeni Saat <span className="text-red-500">*</span>
+                  </label>
+                  {availableTimes.length > 0 ? (
+                    <select
+                      value={rescheduleTime}
+                      onChange={(e) => setRescheduleTime(e.target.value)}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                    >
+                      <option value="">Saat seçiniz</option>
+                      {availableTimes.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg text-sm bg-gray-100 text-gray-500">
+                      {rescheduleDate ? 'Bu tarih için müsait saat bulunmamaktadır' : 'Önce tarih seçiniz'}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Değişiklik Sebebi <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rescheduleReason}
+                    onChange={(e) => setRescheduleReason(e.target.value)}
+                    placeholder="Tarih değişikliği sebebini açıklayınız (en az 10 karakter)"
+                    rows={4}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition resize-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {rescheduleReason.length}/10 karakter (minimum)
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleSubmitReschedule}
+                    disabled={loadingReschedule || !rescheduleDate || !rescheduleTime || rescheduleReason.trim().length < 10}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition"
+                  >
+                    {loadingReschedule ? 'Gönderiliyor...' : 'Talebi Gönder'}
+                  </button>
+                  <button
+                    onClick={() => setShowRescheduleModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition"
+                  >
+                    İptal
+                  </button>
+                </div>
               </div>
             </div>
           </div>

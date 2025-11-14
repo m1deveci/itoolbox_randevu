@@ -1025,5 +1025,356 @@ module.exports = (pool) => {
     }
   });
 
+  // PUT /api/appointments/:id/reschedule - Request appointment reschedule
+  router.put('/:id/reschedule', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      const { newDate, newTime, reason } = req.body;
+      const userId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id']) : null;
+      const userName = req.headers['x-user-name'] 
+        ? decodeURIComponent(req.headers['x-user-name']) 
+        : 'System';
+
+      if (!newDate || !newTime || !reason) {
+        return res.status(400).json({ error: 'Yeni tarih, saat ve değişiklik sebebi gereklidir' });
+      }
+
+      // Get appointment details
+      const [appointments] = await pool.execute(
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at,
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
+         FROM appointments a
+         LEFT JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).json({ error: 'Randevu bulunamadı' });
+      }
+
+      const appointment = appointments[0];
+
+      // Only allow reschedule for approved appointments
+      if (appointment.status !== 'approved') {
+        return res.status(400).json({ error: 'Sadece onaylanmış randevular için tarih değişikliği yapılabilir' });
+      }
+
+      // Check if expert has availability for new date and time
+      const [availabilities] = await pool.execute(
+        `SELECT TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time 
+         FROM availability
+         WHERE expert_id = ? AND (DATE(availability_date) = ? OR DATE(availability_date) = DATE(? + INTERVAL 1 DAY))`,
+        [appointment.expert_id, newDate, newDate]
+      );
+
+      if (availabilities.length === 0) {
+        return res.status(400).json({ error: 'IT Uzmanının bu tarih için müsaitliği bulunmamaktadır' });
+      }
+
+      const requestedTimeStr = newTime.substring(0, 5);
+      const isTimeAvailable = availabilities.some((avail) => {
+        return avail.start_time === requestedTimeStr;
+      });
+
+      if (!isTimeAvailable) {
+        return res.status(400).json({ error: 'Seçilen saat için müsaitlik bulunmamaktadır' });
+      }
+
+      // Check if time slot is already booked
+      const [conflicts] = await pool.execute(
+        `SELECT id FROM appointments
+         WHERE expert_id = ? AND DATE(appointment_date) = ? 
+         AND TIME_FORMAT(appointment_time, '%H:%i') = ?
+         AND status != 'cancelled' AND id != ?`,
+        [appointment.expert_id, newDate, requestedTimeStr, appointmentId]
+      );
+
+      if (conflicts.length > 0) {
+        return res.status(409).json({ error: 'Bu saat için başka bir randevu bulunmaktadır' });
+      }
+
+      // Generate unique token for reschedule request
+      const crypto = require('crypto');
+      const rescheduleToken = crypto.randomBytes(32).toString('hex');
+
+      // Store reschedule request in appointments table (add columns if needed)
+      // Check if columns exist, if not add them
+      try {
+        const [columns] = await pool.execute(`
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'appointments' 
+          AND COLUMN_NAME = 'reschedule_token'
+        `);
+        
+        if (columns.length === 0) {
+          // Columns don't exist, add them
+          await pool.execute(`
+            ALTER TABLE appointments 
+            ADD COLUMN reschedule_token VARCHAR(64) NULL,
+            ADD COLUMN reschedule_new_date DATE NULL,
+            ADD COLUMN reschedule_new_time TIME NULL,
+            ADD COLUMN reschedule_reason TEXT NULL,
+            ADD COLUMN reschedule_status ENUM('pending', 'approved', 'rejected') NULL
+          `);
+        }
+      } catch (alterError) {
+        // Columns might already exist or other error, log and continue
+        console.log('Note: Reschedule columns check/creation:', alterError.message);
+      }
+
+      // Update appointment with reschedule request
+      await pool.execute(
+        `UPDATE appointments 
+         SET reschedule_token = ?, reschedule_new_date = ?, reschedule_new_time = ?, 
+             reschedule_reason = ?, reschedule_status = 'pending'
+         WHERE id = ?`,
+        [rescheduleToken, newDate, newTime, reason, appointmentId]
+      );
+
+      // Send email to user with approve/reject links
+      const { sendRescheduleRequestEmail } = require('../utils/emailHelper.cjs');
+      await sendRescheduleRequestEmail(pool, appointment, {
+        name: appointment.expert_name,
+        email: appointment.expert_email
+      }, newDate, newTime, reason, rescheduleToken).catch(error => {
+        console.error('Error sending reschedule request email:', error);
+      });
+
+      // Log activity
+      try {
+        await pool.execute(
+          `INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            userName,
+            'request_reschedule',
+            'appointment',
+            appointmentId,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_date: appointment.appointment_date,
+              old_time: appointment.appointment_time,
+              new_date: newDate,
+              new_time: newTime,
+              reason: reason
+            }),
+            req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            req.headers['user-agent'] || 'unknown'
+          ]
+        );
+      } catch (error) {
+        console.error('Error logging activity:', error);
+      }
+
+      res.json({ 
+        message: 'Tarih değişikliği talebi gönderildi. Kullanıcıya e-posta ile bildirim yapıldı.',
+        token: rescheduleToken
+      });
+    } catch (error) {
+      console.error('Error requesting reschedule:', error);
+      res.status(500).json({ error: 'Tarih değişikliği talebi oluşturulurken hata oluştu' });
+    }
+  });
+
+  // ===== RESCHEDULE ROUTES (must be before /:id route to avoid conflicts) =====
+  
+  // GET /api/appointments/:id/reschedule-approve/:token - Approve reschedule request
+  router.get('/:id/reschedule-approve/:token', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      const token = req.params.token;
+
+      // Get appointment with reschedule request
+      const [appointments] = await pool.execute(
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                DATE_FORMAT(a.reschedule_new_date, '%Y-%m-%d') as reschedule_new_date, 
+                TIME_FORMAT(a.reschedule_new_time, '%H:%i') as reschedule_new_time,
+                a.reschedule_reason, a.reschedule_status, a.reschedule_token,
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
+         FROM appointments a
+         LEFT JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ? AND a.reschedule_token = ? AND a.reschedule_status = 'pending'`,
+        [appointmentId, token]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Geçersiz veya Süresi Dolmuş İstek</h1>
+              <p>Bu tarih değişikliği talebi geçersiz veya süresi dolmuş olabilir.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      const appointment = appointments[0];
+
+      // Update appointment with new date and time
+      await pool.execute(
+        `UPDATE appointments 
+         SET appointment_date = ?, appointment_time = ?, 
+             reschedule_status = 'approved', reschedule_token = NULL
+         WHERE id = ?`,
+        [appointment.reschedule_new_date, appointment.reschedule_new_time, appointmentId]
+      );
+
+      // Send confirmation email
+      const { sendRescheduleConfirmationEmail } = require('../utils/emailHelper.cjs');
+      await sendRescheduleConfirmationEmail(pool, {
+        ...appointment,
+        appointment_date: appointment.reschedule_new_date,
+        appointment_time: appointment.reschedule_new_time
+      }, {
+        name: appointment.expert_name,
+        email: appointment.expert_email
+      }, appointment.appointment_date, appointment.appointment_time).catch(error => {
+        console.error('Error sending reschedule confirmation email:', error);
+      });
+
+      res.send(`
+        <html>
+          <head><title>Tarih Değişikliği Onaylandı</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f0f9ff;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <div style="color: #10b981; font-size: 64px; margin-bottom: 20px;">✓</div>
+              <h1 style="color: #10b981; margin-bottom: 20px;">Tarih Değişikliği Onaylandı</h1>
+              <p style="color: #6b7280; font-size: 16px; line-height: 1.6;">
+                Randevu tarihiniz başarıyla güncellendi.<br>
+                <strong>Yeni Tarih:</strong> ${appointment.reschedule_new_date}<br>
+                <strong>Yeni Saat:</strong> ${appointment.reschedule_new_time}
+              </p>
+              <p style="color: #9ca3af; font-size: 14px; margin-top: 30px;">
+                Bu sayfayı kapatabilirsiniz.
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Error approving reschedule:', error);
+      res.status(500).send(`
+        <html>
+          <head><title>Hata</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #ef4444;">Bir Hata Oluştu</h1>
+            <p>Tarih değişikliği onaylanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>
+          </body>
+        </html>
+      `);
+    }
+  });
+
+  // GET /api/appointments/:id/reschedule-reject/:token - Reject reschedule request
+  router.get('/:id/reschedule-reject/:token', async (req, res) => {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      const token = req.params.token;
+
+      // Get appointment with reschedule request
+      const [appointments] = await pool.execute(
+        `SELECT a.id, a.reschedule_status, a.reschedule_token
+         FROM appointments a
+         WHERE a.id = ? AND a.reschedule_token = ? AND a.reschedule_status = 'pending'`,
+        [appointmentId, token]
+      );
+
+      if (appointments.length === 0) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Geçersiz veya Süresi Dolmuş İstek</h1>
+              <p>Bu tarih değişikliği talebi geçersiz veya süresi dolmuş olabilir.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      // Get full appointment details for email
+      const [fullAppointments] = await pool.execute(
+        `SELECT a.id, a.expert_id, a.user_name, a.user_email, a.user_phone, a.ticket_no,
+                DATE_FORMAT(a.appointment_date, '%Y-%m-%d') as appointment_date, a.appointment_time,
+                DATE_FORMAT(a.reschedule_new_date, '%Y-%m-%d') as reschedule_new_date, 
+                TIME_FORMAT(a.reschedule_new_time, '%H:%i') as reschedule_new_time,
+                a.reschedule_reason,
+                COALESCE(e.name, 'Bilinmeyen Uzman') as expert_name, e.email as expert_email
+         FROM appointments a
+         LEFT JOIN experts e ON a.expert_id = e.id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      if (fullAppointments.length === 0) {
+        return res.status(404).send(`
+          <html>
+            <head><title>Geçersiz İstek</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: #ef4444;">Geçersiz veya Süresi Dolmuş İstek</h1>
+              <p>Bu tarih değişikliği talebi geçersiz veya süresi dolmuş olabilir.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      const appointment = fullAppointments[0];
+
+      // Update reschedule status to rejected
+      await pool.execute(
+        `UPDATE appointments 
+         SET reschedule_status = 'rejected', reschedule_token = NULL
+         WHERE id = ?`,
+        [appointmentId]
+      );
+
+      // Send rejection email to user
+      const { sendRescheduleRejectionEmail } = require('../utils/emailHelper.cjs');
+      await sendRescheduleRejectionEmail(pool, appointment, {
+        name: appointment.expert_name,
+        email: appointment.expert_email
+      }, appointment.reschedule_new_date, appointment.reschedule_new_time, appointment.reschedule_reason).catch(error => {
+        console.error('Error sending reschedule rejection email:', error);
+      });
+
+      res.send(`
+        <html>
+          <head><title>Tarih Değişikliği Reddedildi</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #fef2f2;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <div style="color: #ef4444; font-size: 64px; margin-bottom: 20px;">✕</div>
+              <h1 style="color: #ef4444; margin-bottom: 20px;">Tarih Değişikliği Reddedildi</h1>
+              <p style="color: #6b7280; font-size: 16px; line-height: 1.6;">
+                Tarih değişikliği talebiniz reddedildi.<br>
+                Mevcut randevu tarihiniz aynı kalacaktır.
+              </p>
+              <p style="color: #9ca3af; font-size: 14px; margin-top: 30px;">
+                Bu sayfayı kapatabilirsiniz.
+              </p>
+            </div>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Error rejecting reschedule:', error);
+      res.status(500).send(`
+        <html>
+          <head><title>Hata</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #ef4444;">Bir Hata Oluştu</h1>
+            <p>Tarih değişikliği reddedilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>
+          </body>
+        </html>
+      `);
+    }
+  });
+
   return router;
 };

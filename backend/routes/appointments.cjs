@@ -1336,6 +1336,32 @@ module.exports = (pool) => {
         console.error('Error sending reschedule request email:', error);
       });
 
+      // Create notification for reschedule request
+      try {
+        await pool.execute(
+          `INSERT INTO notifications (user_email, appointment_id, type, title, message, data)
+           VALUES (?, ?, 'reschedule_requested', ?, ?, ?)`,
+          [
+            appointment.user_email,
+            appointmentId,
+            'Randevu Tarih Değişikliği Talebi',
+            `${appointment.expert_name} adlı IT Uzmanı, randevu tarihinizi değiştirmek istiyor. ${newDate} ${newTime}'de yeni tarih önerilmektedir.`,
+            JSON.stringify({
+              appointment_id: appointmentId,
+              old_date: appointment.appointment_date,
+              old_time: appointment.appointment_time,
+              new_date: newDate,
+              new_time: newTime,
+              reason: reason,
+              expert_name: appointment.expert_name
+            })
+          ]
+        );
+      } catch (notifError) {
+        console.error('Error creating reschedule request notification:', notifError);
+        // Continue even if notification creation fails
+      }
+
       // Log activity
       try {
         await pool.execute(
